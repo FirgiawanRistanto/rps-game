@@ -3,8 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
 
+// supaya TypeScript nggak error pas akses window.Camera
+declare global {
+  interface Window {
+    Camera: any;
+  }
+}
+
 export default function GamePage() {
-  const webcamRef = useRef(null);
+  const webcamRef = useRef<Webcam>(null);
   const [gesture, setGesture] = useState("");
   const [score, setScore] = useState({ player: 0, ai: 0 });
   const [result, setResult] = useState("");
@@ -13,9 +20,7 @@ export default function GamePage() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
 
-  // Ref untuk tandai ronde sudah dimainkan agar gak double
   const roundPlayedRef = useRef(false);
-  // Ref supaya hands.onResults gak jalan kalau komponen sudah unmount
   const isActiveRef = useRef(true);
 
   useEffect(() => {
@@ -26,12 +31,17 @@ export default function GamePage() {
     const video = webcamRef.current.video;
     if (!video) return;
 
+    let hands: any;
+    let camera: any;
+
+    // polling untuk tunggu mediapipe Hands sudah load di window
     const interval = setInterval(() => {
-      if (window.Hands && window.Camera) {
+      if ((window as any).Hands && window.Camera) {
         clearInterval(interval);
 
-        const hands = new window.Hands({
-          locateFile: (file) => `/mediapipe/hands/${file}`,
+        hands = new (window as any).Hands({
+          locateFile: (file: string) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
         });
 
         hands.setOptions({
@@ -58,14 +68,14 @@ export default function GamePage() {
             if (gestureName) {
               setGesture(gestureName);
               playRound(gestureName);
-              roundPlayedRef.current = true; // tandai ronde sudah dimainkan
+              roundPlayedRef.current = true;
               setGameStarted(false);
               setShowResultModal(true);
             }
           }
         });
 
-        const camera = new window.Camera(video, {
+        camera = new window.Camera(video, {
           onFrame: async () => {
             await hands.send({ image: video });
           },
@@ -74,17 +84,14 @@ export default function GamePage() {
         });
 
         camera.start();
-
-        // Bersihkan saat komponen unmount
-        return () => {
-          isActiveRef.current = false;
-          camera.stop();
-        };
       }
     }, 100);
 
-    // Bersihkan interval jika ada
-    return () => clearInterval(interval);
+    return () => {
+      isActiveRef.current = false;
+      clearInterval(interval);
+      if (camera) camera.stop();
+    };
   }, [gameStarted]);
 
   const playRound = (playerMove: string) => {
@@ -162,12 +169,22 @@ export default function GamePage() {
 
   return (
     <>
-      {/* Load mediapipe libs */}
-      <Script src="/mediapipe/hands/hands.js" strategy="beforeInteractive" />
-      <Script src="/mediapipe/camera/camera_utils.js" strategy="beforeInteractive" />
+      {/* Load mediapipe Hands dan Camera Utils dari CDN */}
+      <Script
+        src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
+        strategy="beforeInteractive"
+      />
+      <Script
+        src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+        strategy="beforeInteractive"
+      />
 
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-        <Webcam ref={webcamRef} mirrored className="rounded-lg shadow-lg w-full max-w-md" />
+        <Webcam
+          ref={webcamRef}
+          mirrored
+          className="rounded-lg shadow-lg w-full max-w-md"
+        />
 
         <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
           Detected Gesture: {gesture || "..."}
