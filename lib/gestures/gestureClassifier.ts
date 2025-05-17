@@ -2,7 +2,7 @@
 export const classifyGesture = (landmarks: NormalizedLandmarkList) => {
   if (!landmarks || landmarks.length !== 21) return 'unknown';
 
-  const [thumbTip, indexTip, middleTip, ringTip, pinkyTip] = [
+  const [indexTip, middleTip, ringTip, pinkyTip] = [
     landmarks[4],
     landmarks[8],
     landmarks[12],
