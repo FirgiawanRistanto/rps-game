@@ -116,14 +116,12 @@ export default function GamePage() {
   };
 
   const classifyGesture = (landmarks: any[]): string => {
-    const thumbTip = landmarks[4];
     const indexTip = landmarks[8];
     const middleTip = landmarks[12];
     const ringTip = landmarks[16];
     const pinkyTip = landmarks[20];
 
     const isFist =
-      thumbTip.y > landmarks[3].y &&
       indexTip.y > landmarks[6].y &&
       middleTip.y > landmarks[10].y &&
       ringTip.y > landmarks[14].y &&
