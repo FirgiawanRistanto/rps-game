@@ -1,4 +1,7 @@
 // lib/gestureClassifier.ts
+import type { NormalizedLandmarkList } from '@mediapipe/hands';
+
+
 export const classifyGesture = (landmarks: NormalizedLandmarkList) => {
   if (!landmarks || landmarks.length !== 21) return 'unknown';
 
