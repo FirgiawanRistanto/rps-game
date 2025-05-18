@@ -3,24 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
 
-// Untuk menghindari TypeScript error pada window.Hands dan window.Camera
 declare global {
   interface Window {
-    Hands: any;
     Camera: any;
+    Hands: any;
   }
 }
 
 export default function GamePage() {
   const webcamRef = useRef<Webcam>(null);
-  const sfxRef = useRef({
-    countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
-    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
-    win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
-    lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
-    draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
-  });
-
   const [gesture, setGesture] = useState("");
   const [score, setScore] = useState({ player: 0, ai: 0 });
   const [result, setResult] = useState("");
@@ -33,94 +24,84 @@ export default function GamePage() {
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
 
-  useEffect(() => {
-  isActiveRef.current = true;
+  // Audio effects
+  const sfx = useRef({
+    countdown: typeof window !== "undefined" ? new Audio("/sfx/countdown.mp3") : undefined,
+    detect: typeof window !== "undefined" ? new Audio("/sfx/detect.mp3") : undefined,
+    win: typeof window !== "undefined" ? new Audio("/sfx/win.mp3") : undefined,
+    lose: typeof window !== "undefined" ? new Audio("/sfx/lose.mp3") : undefined,
+    draw: typeof window !== "undefined" ? new Audio("/sfx/draw.mp3") : undefined,
+  });
 
-  const init = async () => {
+  useEffect(() => {
+    isActiveRef.current = true;
+
     if (!webcamRef.current || typeof window === "undefined") return;
     const video = webcamRef.current.video;
+    if (!video) return;
 
-    // Tunggu sampai video webcam siap
-    const waitUntilVideoReady = () =>
-      new Promise<void>((resolve) => {
-        const check = () => {
-          if (video && video.readyState === 4) {
-            resolve();
-          } else {
-            requestAnimationFrame(check);
+    let hands: any;
+    let camera: any;
+
+    const interval = setInterval(() => {
+      if (window.Hands && window.Camera) {
+        clearInterval(interval);
+
+        hands = new window.Hands({
+          locateFile: (file: string) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+        });
+
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 0,
+          minDetectionConfidence: 0.75,
+          minTrackingConfidence: 0.75,
+        });
+
+        hands.onResults((results: any) => {
+          if (!isActiveRef.current) return;
+          setIsModelReady(true);
+
+          if (
+            results.multiHandLandmarks &&
+            results.multiHandLandmarks.length > 0 &&
+            !roundPlayedRef.current
+          ) {
+            const landmarks = results.multiHandLandmarks[0];
+            const gestureName = classifyGesture(landmarks);
+
+            if (gestureName && gameStarted) {
+              sfx.current.detect?.play();
+              setGesture(gestureName);
+              playRound(gestureName);
+              roundPlayedRef.current = true;
+              setGameStarted(false);
+              setShowDetectingModal(false);
+              setShowResultModal(true);
+            }
           }
-        };
-        check();
-      });
+        });
 
-    await waitUntilVideoReady();
+        camera = new window.Camera(video, {
+          onFrame: async () => {
+            await hands.send({ image: video });
+          },
+          width: 640,
+          height: 480,
+          fps: 60, // ✅ Boost FPS
+        });
 
-    const handsReady = () =>
-      new Promise<void>((resolve) => {
-        const check = () => {
-          if (window.Hands && window.Camera) resolve();
-          else setTimeout(check, 50);
-        };
-        check();
-      });
-
-    await handsReady();
-
-    const hands = new window.Hands({
-      locateFile: (file: string) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-    });
-
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 0,
-      minDetectionConfidence: 0.75,
-      minTrackingConfidence: 0.75,
-    });
-
-    hands.onResults((results: any) => {
-      setIsModelReady(true);
-
-      if (
-        results.multiHandLandmarks &&
-        results.multiHandLandmarks.length > 0 &&
-        isActiveRef.current &&
-        gameStarted &&
-        !roundPlayedRef.current
-      ) {
-        const landmarks = results.multiHandLandmarks[0];
-        const gestureName = classifyGesture(landmarks);
-
-        if (gestureName) {
-          sfxRef.current.detect?.play();
-          setGesture(gestureName);
-          playRound(gestureName);
-          roundPlayedRef.current = true;
-          setGameStarted(false);
-          setShowDetectingModal(false);
-          setShowResultModal(true);
-        }
+        camera.start();
       }
-    });
+    }, 100);
 
-    const processFrame = async () => {
-      if (video && isActiveRef.current) {
-        await hands.send({ image: video });
-        requestAnimationFrame(processFrame);
-      }
+    return () => {
+      isActiveRef.current = false;
+      clearInterval(interval);
+      if (camera) camera.stop();
     };
-
-    requestAnimationFrame(processFrame); // Mulai proses deteksi per frame
-  };
-
-  init();
-
-  return () => {
-    isActiveRef.current = false;
-  };
-}, [gameStarted]);
-
-
+  }, [gameStarted]);
 
   const classifyGesture = (landmarks: any[]): string => {
     const indexTip = landmarks[8];
@@ -160,18 +141,18 @@ export default function GamePage() {
     let outcome = "";
     if (playerMove === aiMove) {
       outcome = "Draw";
-      sfxRef.current.draw?.play();
+      sfx.current.draw?.play();
     } else if (
       (playerMove === "rock" && aiMove === "scissors") ||
       (playerMove === "paper" && aiMove === "rock") ||
       (playerMove === "scissors" && aiMove === "paper")
     ) {
       outcome = "You win!";
-      sfxRef.current.win?.play();
+      sfx.current.win?.play();
       setScore((s) => ({ ...s, player: s.player + 1 }));
     } else {
       outcome = "AI wins!";
-      sfxRef.current.lose?.play();
+      sfx.current.lose?.play();
       setScore((s) => ({ ...s, ai: s.ai + 1 }));
     }
 
@@ -188,7 +169,7 @@ export default function GamePage() {
 
     const interval = setInterval(() => {
       setCountdown((prev) => {
-        sfxRef.current.countdown?.play();
+        sfx.current.countdown?.play();
         if (prev === 1) {
           clearInterval(interval);
           setCountdown(null);
@@ -203,7 +184,6 @@ export default function GamePage() {
 
   return (
     <>
-      {/* CDN Script Loader */}
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
         strategy="beforeInteractive"
@@ -242,7 +222,6 @@ export default function GamePage() {
           </button>
         )}
 
-        {/* Modal hasil match */}
         {showResultModal && (
           <div
             className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
@@ -264,7 +243,6 @@ export default function GamePage() {
           </div>
         )}
 
-        {/* Modal mendeteksi gesture */}
         {showDetectingModal && (
           <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
             <div className="bg-gray-900 p-6 rounded-lg text-center animate-pulse">
