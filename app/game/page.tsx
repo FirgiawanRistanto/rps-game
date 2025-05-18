@@ -1,17 +1,16 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
-import Script from "next/script";
-
-declare global {
-  interface Window {
-    Camera: any;
-    Hands: any;
-  }
-}
 
 export default function GamePage() {
   const webcamRef = useRef<Webcam>(null);
+  const [gesture, setGesture] = useState("");
+  const [result, setResult] = useState("");
+  const [score, setScore] = useState({ player: 0, ai: 0 });
+  const [loading, setLoading] = useState(true);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [gameStarted, setGameStarted] = useState(false);
+
   const sfx = useRef({
     countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
     detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
@@ -20,58 +19,45 @@ export default function GamePage() {
     draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
   });
 
-  const [gesture, setGesture] = useState("");
-  const [score, setScore] = useState({ player: 0, ai: 0 });
-  const [result, setResult] = useState("");
-  const [isModelReady, setIsModelReady] = useState(false);
-  const [gameStarted, setGameStarted] = useState(false);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [scriptsLoaded, setScriptsLoaded] = useState(false);
-
   const roundPlayedRef = useRef(false);
-  const isActiveRef = useRef(true);
-  const modelInitRef = useRef(false);
+  const cameraRef = useRef<any>(null);
+  const handsRef = useRef<any>(null);
 
-  const initModel = () => {
-    if (modelInitRef.current || !scriptsLoaded) return;
-    modelInitRef.current = true;
+  const initModel = async () => {
+    const { Hands } = await import("@mediapipe/hands");
+    const { Camera } = await import("@mediapipe/camera_utils");
 
     const video = webcamRef.current?.video;
     if (!video) return;
 
-    const hands = new window.Hands({
-      locateFile: (file: string) =>
-        `https://unpkg.com/@mediapipe/hands/${file}`,
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
     });
 
     hands.setOptions({
       maxNumHands: 1,
       modelComplexity: 0,
-      minDetectionConfidence: 0.75,
-      minTrackingConfidence: 0.75,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7,
     });
 
     hands.onResults((results: any) => {
-      if (!isActiveRef.current || roundPlayedRef.current || !gameStarted) return;
-
-      setIsModelReady(true);
+      if (!gameStarted || roundPlayedRef.current) return;
 
       const landmarks = results.multiHandLandmarks?.[0];
       if (landmarks) {
-        const gestureName = classifyGesture(landmarks);
-
-        if (gestureName) {
+        const move = classifyGesture(landmarks);
+        if (move) {
           roundPlayedRef.current = true;
           setGameStarted(false);
           sfx.current.detect?.play();
-          setGesture(gestureName);
-
-          setTimeout(() => playRound(gestureName), 100);
+          setGesture(move);
+          setTimeout(() => playRound(move), 100);
         }
       }
     });
 
-    const camera = new window.Camera(video, {
+    const camera = new Camera(video, {
       onFrame: async () => {
         await hands.send({ image: video });
       },
@@ -79,53 +65,54 @@ export default function GamePage() {
       height: 480,
     });
 
+    handsRef.current = hands;
+    cameraRef.current = camera;
+
     camera.start();
+    setLoading(false);
   };
 
   useEffect(() => {
-    isActiveRef.current = true;
-    if (scriptsLoaded) initModel();
-
+    if (typeof window !== "undefined") {
+      initModel();
+    }
     return () => {
-      isActiveRef.current = false;
+      cameraRef.current?.stop?.();
     };
-  }, [scriptsLoaded]);
+  }, []);
 
-  const classifyGesture = (landmarks: any[]): string => {
-    const indexTip = landmarks[8];
-    const middleTip = landmarks[12];
-    const ringTip = landmarks[16];
-    const pinkyTip = landmarks[20];
+  const classifyGesture = (landmarks: any[]) => {
+    const index = landmarks[8];
+    const middle = landmarks[12];
+    const ring = landmarks[16];
+    const pinky = landmarks[20];
 
     const isFist =
-      indexTip.y > landmarks[6].y &&
-      middleTip.y > landmarks[10].y &&
-      ringTip.y > landmarks[14].y &&
-      pinkyTip.y > landmarks[18].y;
+      index.y > landmarks[6].y &&
+      middle.y > landmarks[10].y &&
+      ring.y > landmarks[14].y &&
+      pinky.y > landmarks[18].y;
 
-    const isOpenPalm =
-      indexTip.y < landmarks[6].y &&
-      middleTip.y < landmarks[10].y &&
-      ringTip.y < landmarks[14].y &&
-      pinkyTip.y < landmarks[18].y;
+    const isPalm =
+      index.y < landmarks[6].y &&
+      middle.y < landmarks[10].y &&
+      ring.y < landmarks[14].y &&
+      pinky.y < landmarks[18].y;
 
     const isScissors =
-      indexTip.y < landmarks[6].y &&
-      middleTip.y < landmarks[10].y &&
-      ringTip.y > landmarks[14].y &&
-      pinkyTip.y > landmarks[18].y;
+      index.y < landmarks[6].y &&
+      middle.y < landmarks[10].y &&
+      ring.y > landmarks[14].y &&
+      pinky.y > landmarks[18].y;
 
     if (isFist) return "rock";
-    if (isOpenPalm) return "paper";
+    if (isPalm) return "paper";
     if (isScissors) return "scissors";
-
     return "";
   };
 
   const playRound = (playerMove: string) => {
-    const moves = ["rock", "paper", "scissors"];
-    const aiMove = moves[Math.floor(Math.random() * 3)];
-
+    const aiMove = ["rock", "paper", "scissors"][Math.floor(Math.random() * 3)];
     let outcome = "";
 
     if (playerMove === aiMove) {
@@ -138,15 +125,14 @@ export default function GamePage() {
     ) {
       outcome = "You win!";
       sfx.current.win?.play();
-      setScore((s) => ({ ...s, player: s.player + 1 }));
+      setScore((prev) => ({ ...prev, player: prev.player + 1 }));
     } else {
       outcome = "AI wins!";
       sfx.current.lose?.play();
-      setScore((s) => ({ ...s, ai: s.ai + 1 }));
+      setScore((prev) => ({ ...prev, ai: prev.ai + 1 }));
     }
 
     setResult(`${playerMove} vs ${aiMove} → ${outcome}`);
-
     setTimeout(() => {
       setGesture("");
       roundPlayedRef.current = false;
@@ -155,73 +141,51 @@ export default function GamePage() {
 
   const startGame = () => {
     setCountdown(3);
-    setGesture("");
     setResult("");
+    setGesture("");
     roundPlayedRef.current = false;
 
     const interval = setInterval(() => {
       setCountdown((prev) => {
-        sfx.current.countdown?.play();
-
         if (prev === 1) {
           clearInterval(interval);
           setCountdown(null);
           setGameStarted(true);
           return null;
         }
-
+        sfx.current.countdown?.play();
         return (prev ?? 1) - 1;
       });
     }, 1000);
   };
 
   return (
-    <>
-      {/* OPTIMIZED CDN LOAD */}
-      <Script
-        src="https://unpkg.com/@mediapipe/hands/hands.min.js"
-        strategy="beforeInteractive"
-        onLoad={() => setScriptsLoaded((prev) => !prev ? true : prev)}
-      />
-      <Script
-        src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"
-        strategy="beforeInteractive"
-        onLoad={() => setScriptsLoaded((prev) => !prev ? true : prev)}
-      />
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+      <Webcam ref={webcamRef} mirrored className="rounded-lg shadow-lg w-full max-w-md" />
 
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-        <Webcam
-          ref={webcamRef}
-          mirrored
-          className="rounded-lg shadow-lg w-full max-w-md"
-        />
+      <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
+        {gesture
+          ? `Detected: ${gesture.toUpperCase()}`
+          : countdown !== null
+          ? `Get Ready... ${countdown}`
+          : gameStarted
+          ? "Mendeteksi gestur..."
+          : ""}
+      </h2>
 
-        <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
-          {gesture
-            ? `Detected: ${gesture.toUpperCase()}`
-            : countdown !== null
-            ? `Get Ready... ${countdown}`
-            : gameStarted
-            ? "Mendeteksi gestur..."
-            : ""}
-        </h2>
+      <p className="mt-2">Score: You {score.player} - AI {score.ai}</p>
 
-        <p className="mt-2">
-          Score: You {score.player} - AI {score.ai}
-        </p>
+      <button
+        onClick={startGame}
+        disabled={loading || countdown !== null || gameStarted}
+        className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
+      >
+        {loading ? "Loading Model..." : "Start Game"}
+      </button>
 
-        <button
-          onClick={startGame}
-          disabled={!isModelReady || countdown !== null || gameStarted}
-          className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
-        >
-          {isModelReady ? "Start Game" : "Loading Model..."}
-        </button>
-
-        {result && (
-          <p className="mt-6 text-lg text-green-400 font-semibold">{result}</p>
-        )}
-      </div>
-    </>
+      {result && (
+        <p className="mt-6 text-lg text-green-400 font-semibold">{result}</p>
+      )}
+    </div>
   );
 }
