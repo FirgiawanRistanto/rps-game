@@ -1,10 +1,8 @@
-// app/game/page.tsx
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
 
-// Global untuk MediaPipe Camera
 declare global {
   interface Window {
     Camera: any;
@@ -25,14 +23,29 @@ export default function GamePage() {
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
 
-  // Audio effects
-  const sfx = {
-    countdown: new Audio("/sfx/countdown.mp3"),
-    detect: new Audio("/sfx/detect.mp3"),
-    win: new Audio("/sfx/win.mp3"),
-    lose: new Audio("/sfx/lose.mp3"),
-    draw: new Audio("/sfx/draw.mp3"),
-  };
+  const sfxRef = useRef<{
+    countdown: HTMLAudioElement | null;
+    detect: HTMLAudioElement | null;
+    win: HTMLAudioElement | null;
+    lose: HTMLAudioElement | null;
+    draw: HTMLAudioElement | null;
+  }>({
+    countdown: null,
+    detect: null,
+    win: null,
+    lose: null,
+    draw: null,
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sfxRef.current.countdown = new Audio("/sfx/countdown.mp3");
+      sfxRef.current.detect = new Audio("/sfx/detect.mp3");
+      sfxRef.current.win = new Audio("/sfx/win.mp3");
+      sfxRef.current.lose = new Audio("/sfx/lose.mp3");
+      sfxRef.current.draw = new Audio("/sfx/draw.mp3");
+    }
+  }, []);
 
   useEffect(() => {
     isActiveRef.current = true;
@@ -56,7 +69,7 @@ export default function GamePage() {
 
         hands.setOptions({
           maxNumHands: 1,
-          modelComplexity: 0, // lighter model
+          modelComplexity: 0,
           minDetectionConfidence: 0.75,
           minTrackingConfidence: 0.75,
         });
@@ -75,7 +88,7 @@ export default function GamePage() {
             const gestureName = classifyGesture(landmarks);
 
             if (gestureName) {
-              sfx.detect.play();
+              sfxRef.current.detect?.play();
               setGesture(gestureName);
               playRound(gestureName);
               roundPlayedRef.current = true;
@@ -143,18 +156,18 @@ export default function GamePage() {
     let outcome = "";
     if (playerMove === aiMove) {
       outcome = "Draw";
-      sfx.draw.play();
+      sfxRef.current.draw?.play();
     } else if (
       (playerMove === "rock" && aiMove === "scissors") ||
       (playerMove === "paper" && aiMove === "rock") ||
       (playerMove === "scissors" && aiMove === "paper")
     ) {
       outcome = "You win!";
-      sfx.win.play();
+      sfxRef.current.win?.play();
       setScore((s) => ({ ...s, player: s.player + 1 }));
     } else {
       outcome = "AI wins!";
-      sfx.lose.play();
+      sfxRef.current.lose?.play();
       setScore((s) => ({ ...s, ai: s.ai + 1 }));
     }
 
@@ -171,7 +184,7 @@ export default function GamePage() {
 
     const interval = setInterval(() => {
       setCountdown((prev) => {
-        sfx.countdown.play();
+        sfxRef.current.countdown?.play();
         if (prev === 1) {
           clearInterval(interval);
           setCountdown(null);
@@ -186,7 +199,6 @@ export default function GamePage() {
 
   return (
     <>
-      {/* CDN Script Loader */}
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
         strategy="beforeInteractive"
@@ -225,7 +237,6 @@ export default function GamePage() {
           </button>
         )}
 
-        {/* Modal hasil match */}
         {showResultModal && (
           <div
             className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
@@ -247,12 +258,13 @@ export default function GamePage() {
           </div>
         )}
 
-        {/* Modal mendeteksi gesture */}
         {showDetectingModal && (
           <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
             <div className="bg-gray-900 p-6 rounded-lg text-center animate-pulse">
               <h2 className="text-lg font-semibold">Mendeteksi gestur...</h2>
-              <p className="text-sm text-gray-300 mt-2">Arahkan tanganmu ke kamera</p>
+              <p className="text-sm text-gray-300 mt-2">
+                Arahkan tanganmu ke kamera
+              </p>
             </div>
           </div>
         )}
