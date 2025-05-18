@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
 
+// Global untuk MediaPipe Camera
 declare global {
   interface Window {
     Camera: any;
@@ -11,6 +12,14 @@ declare global {
 
 export default function GamePage() {
   const webcamRef = useRef<Webcam>(null);
+  const sfxRef = useRef({
+    countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
+    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
+    win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
+    lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
+    draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
+  });
+
   const [gesture, setGesture] = useState("");
   const [score, setScore] = useState({ player: 0, ai: 0 });
   const [result, setResult] = useState("");
@@ -22,30 +31,6 @@ export default function GamePage() {
 
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
-
-  const sfxRef = useRef<{
-    countdown: HTMLAudioElement | null;
-    detect: HTMLAudioElement | null;
-    win: HTMLAudioElement | null;
-    lose: HTMLAudioElement | null;
-    draw: HTMLAudioElement | null;
-  }>({
-    countdown: null,
-    detect: null,
-    win: null,
-    lose: null,
-    draw: null,
-  });
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      sfxRef.current.countdown = new Audio("/sfx/countdown.mp3");
-      sfxRef.current.detect = new Audio("/sfx/detect.mp3");
-      sfxRef.current.win = new Audio("/sfx/win.mp3");
-      sfxRef.current.lose = new Audio("/sfx/lose.mp3");
-      sfxRef.current.draw = new Audio("/sfx/draw.mp3");
-    }
-  }, []);
 
   useEffect(() => {
     isActiveRef.current = true;
@@ -69,18 +54,18 @@ export default function GamePage() {
 
         hands.setOptions({
           maxNumHands: 1,
-          modelComplexity: 0,
+          modelComplexity: 0, // 💨 mode cepat
           minDetectionConfidence: 0.75,
           minTrackingConfidence: 0.75,
         });
 
         hands.onResults((results: any) => {
-          if (!isActiveRef.current) return;
           setIsModelReady(true);
 
           if (
             results.multiHandLandmarks &&
             results.multiHandLandmarks.length > 0 &&
+            isActiveRef.current &&
             gameStarted &&
             !roundPlayedRef.current
           ) {
@@ -99,15 +84,22 @@ export default function GamePage() {
           }
         });
 
-        camera = new window.Camera(video, {
-          onFrame: async () => {
+        // 🎯 requestAnimationFrame = lebih cepat dari onFrame biasa
+        const processFrame = async () => {
+          if (video && isActiveRef.current) {
             await hands.send({ image: video });
-          },
+            requestAnimationFrame(processFrame);
+          }
+        };
+
+        camera = new window.Camera(video, {
+          onFrame: () => {},
           width: 640,
           height: 480,
         });
 
         camera.start();
+        requestAnimationFrame(processFrame);
       }
     }, 100);
 
@@ -116,7 +108,7 @@ export default function GamePage() {
       clearInterval(interval);
       if (camera) camera.stop();
     };
-  }, [gameStarted]);
+  }, []);
 
   const classifyGesture = (landmarks: any[]): string => {
     const indexTip = landmarks[8];
@@ -199,6 +191,7 @@ export default function GamePage() {
 
   return (
     <>
+      {/* CDN Script Loader */}
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
         strategy="beforeInteractive"
@@ -237,6 +230,7 @@ export default function GamePage() {
           </button>
         )}
 
+        {/* Modal hasil match */}
         {showResultModal && (
           <div
             className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
@@ -258,13 +252,12 @@ export default function GamePage() {
           </div>
         )}
 
+        {/* Modal mendeteksi gesture */}
         {showDetectingModal && (
           <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
             <div className="bg-gray-900 p-6 rounded-lg text-center animate-pulse">
               <h2 className="text-lg font-semibold">Mendeteksi gestur...</h2>
-              <p className="text-sm text-gray-300 mt-2">
-                Arahkan tanganmu ke kamera
-              </p>
+              <p className="text-sm text-gray-300 mt-2">Arahkan tanganmu ke kamera</p>
             </div>
           </div>
         )}
