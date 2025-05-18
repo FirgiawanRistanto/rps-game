@@ -1,4 +1,3 @@
-// app/game/page.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -28,14 +27,21 @@ export default function GamePage() {
   const handsRef = useRef<any>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const sfx = useRef({
-    countdown: new Audio("/sfx/countdown.mp3"),
-    detect: new Audio("/sfx/detect.mp3"),
-    win: new Audio("/sfx/win.mp3"),
-    lose: new Audio("/sfx/lose.mp3"),
-    draw: new Audio("/sfx/draw.mp3"),
-    save: new Audio("/sfx/save.mp3"),
-  });
+  const sfx = useRef<any>({});
+
+  useEffect(() => {
+    // Inisialisasi Audio hanya di client
+    if (typeof window !== "undefined") {
+      sfx.current = {
+        countdown: new Audio("/sfx/countdown.mp3"),
+        detect: new Audio("/sfx/detect.mp3"),
+        win: new Audio("/sfx/win.mp3"),
+        lose: new Audio("/sfx/lose.mp3"),
+        draw: new Audio("/sfx/draw.mp3"),
+        save: new Audio("/sfx/save.mp3"),
+      };
+    }
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -63,7 +69,7 @@ export default function GamePage() {
           ) {
             const gestureName = classifyGesture(results.multiHandLandmarks[0]);
             if (gestureName) {
-              sfx.current.detect.play();
+              sfx.current.detect?.play();
               setGesture(gestureName);
               playRound(gestureName);
               roundPlayedRef.current = true;
@@ -84,7 +90,7 @@ export default function GamePage() {
     return () => {
       handsRef.current = null;
     };
-  }, []);
+  }, [gameStarted]); // dependensi diperbaiki
 
   const startDetectionLoop = () => {
     const detect = async () => {
@@ -139,18 +145,18 @@ export default function GamePage() {
     let outcome = "";
     if (playerMove === aiMove) {
       outcome = "Draw";
-      sfx.current.draw.play();
+      sfx.current.draw?.play();
     } else if (
       (playerMove === "rock" && aiMove === "scissors") ||
       (playerMove === "paper" && aiMove === "rock") ||
       (playerMove === "scissors" && aiMove === "paper")
     ) {
       outcome = "You win!";
-      sfx.current.win.play();
+      sfx.current.win?.play();
       setScore((s) => ({ ...s, player: s.player + 1 }));
     } else {
       outcome = "AI wins!";
-      sfx.current.lose.play();
+      sfx.current.lose?.play();
       setScore((s) => ({ ...s, ai: s.ai + 1 }));
     }
 
@@ -166,7 +172,7 @@ export default function GamePage() {
 
     const interval = setInterval(() => {
       setCountdown((prev) => {
-        sfx.current.countdown.play();
+        sfx.current.countdown?.play();
         if (prev === 1) {
           clearInterval(interval);
           setCountdown(null);
@@ -186,7 +192,7 @@ export default function GamePage() {
         ai: score.ai,
         createdAt: serverTimestamp(),
       });
-      sfx.current.save.play();
+      sfx.current.save?.play();
       alert("Skor berhasil disimpan!");
     } catch (err) {
       alert("Gagal menyimpan skor.");
