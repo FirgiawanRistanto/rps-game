@@ -33,28 +33,39 @@ export default function GamePage() {
   const isActiveRef = useRef(true);
 
   useEffect(() => {
-    isActiveRef.current = true;
+  isActiveRef.current = true;
 
+  const waitForCamera = async () => {
     if (!webcamRef.current || typeof window === "undefined") return;
-
     const video = webcamRef.current.video;
-    if (!video) return;
 
-    let hands: any;
-    let camera: any;
+    // Tunggu sampai video dari webcam siap
+    const waitUntilReady = () =>
+      new Promise<void>((resolve) => {
+        const check = () => {
+          if (video && video.readyState === 4) {
+            resolve();
+          } else {
+            requestAnimationFrame(check);
+          }
+        };
+        check();
+      });
+
+    await waitUntilReady();
 
     const interval = setInterval(() => {
       if ((window as any).Hands && window.Camera) {
         clearInterval(interval);
 
-        hands = new (window as any).Hands({
+        const hands = new (window as any).Hands({
           locateFile: (file: string) =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
         });
 
         hands.setOptions({
           maxNumHands: 1,
-          modelComplexity: 0, // 💨 mode cepat
+          modelComplexity: 0,
           minDetectionConfidence: 0.75,
           minTrackingConfidence: 0.75,
         });
@@ -84,7 +95,6 @@ export default function GamePage() {
           }
         });
 
-        // 🎯 requestAnimationFrame = lebih cepat dari onFrame biasa
         const processFrame = async () => {
           if (video && isActiveRef.current) {
             await hands.send({ image: video });
@@ -92,7 +102,7 @@ export default function GamePage() {
           }
         };
 
-        camera = new window.Camera(video, {
+        const camera = new window.Camera(video, {
           onFrame: () => {},
           width: 640,
           height: 480,
@@ -102,13 +112,15 @@ export default function GamePage() {
         requestAnimationFrame(processFrame);
       }
     }, 100);
+  };
 
-    return () => {
-      isActiveRef.current = false;
-      clearInterval(interval);
-      if (camera) camera.stop();
-    };
-  }, []);
+  waitForCamera();
+
+  return () => {
+    isActiveRef.current = false;
+  };
+}, []);
+
 
   const classifyGesture = (landmarks: any[]): string => {
     const indexTip = landmarks[8];
