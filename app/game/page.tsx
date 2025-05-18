@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
 import { classifyGesture } from "@/lib/gestures/gestureClassifier";
+import { smoothGesture, resetGestureHistory } from "@/lib/gestures/smoothing";
+
 
 declare global {
   interface Window {
@@ -85,9 +87,12 @@ export default function GamePage() {
         ) {
           const landmarks = results.multiHandLandmarks[0];
           const detectedGesture = classifyGesture(landmarks);
-          if (detectedGesture !== "unknown") {
-            setGesture(detectedGesture);
-            playRound(detectedGesture);
+
+          const stableGesture = smoothGesture(detectedGesture);
+
+          if (stableGesture !== "unknown") {
+            setGesture(stableGesture);
+            playRound(stableGesture);
             roundPlayedRef.current = true;
             setGameStarted(false);
             setShowDetectingModal(false);
@@ -95,6 +100,7 @@ export default function GamePage() {
           }
         }
       });
+
 
       const processFrame = async () => {
         if (video && isActiveRef.current) {
@@ -145,10 +151,11 @@ export default function GamePage() {
     setShowResultModal(false);
     setShowDetectingModal(false);
     roundPlayedRef.current = false;
+    resetGestureHistory();
 
     const interval = setInterval(() => {
+      sfxRef.current.countdown?.play();
       setCountdown((prev) => {
-        sfxRef.current.countdown?.play();
         if (prev === 1) {
           clearInterval(interval);
           setCountdown(null);
@@ -160,6 +167,7 @@ export default function GamePage() {
       });
     }, 1000);
   };
+
 
   return (
     <>
