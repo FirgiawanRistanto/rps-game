@@ -1,37 +1,29 @@
-// lib/gestureClassifier.ts
-import type { NormalizedLandmarkList } from '@mediapipe/hands';
-
+import type { NormalizedLandmarkList } from "@mediapipe/hands";
 
 export const classifyGesture = (landmarks: NormalizedLandmarkList) => {
-  if (!landmarks || landmarks.length !== 21) return 'unknown';
+  if (!landmarks || landmarks.length !== 21) return "unknown";
 
-  const [indexTip, middleTip, ringTip, pinkyTip] = [
-    landmarks[4],
-    landmarks[8],
-    landmarks[12],
-    landmarks[16],
-    landmarks[20],
-  ];
+  const y = (i: number) => landmarks[i].y;
 
-  const indexFolded = indexTip.y > landmarks[6].y;
-  const middleFolded = middleTip.y > landmarks[10].y;
-  const ringFolded = ringTip.y > landmarks[14].y;
-  const pinkyFolded = pinkyTip.y > landmarks[18].y;
+  const indexFolded = y(8) > y(6) + 0.02;
+  const middleFolded = y(12) > y(10) + 0.02;
+  const ringFolded = y(16) > y(14) + 0.02;
+  const pinkyFolded = y(20) > y(18) + 0.02;
 
   // ✊ Rock
   if (indexFolded && middleFolded && ringFolded && pinkyFolded) {
-    return 'rock';
+    return "rock";
   }
 
   // ✋ Paper
   if (!indexFolded && !middleFolded && !ringFolded && !pinkyFolded) {
-    return 'paper';
+    return "paper";
   }
 
-  // ✌ Scissors
+  // ✌️ Scissors
   if (!indexFolded && !middleFolded && ringFolded && pinkyFolded) {
-    return 'scissors';
+    return "scissors";
   }
 
-  return 'unknown';
+  return "unknown";
 };
