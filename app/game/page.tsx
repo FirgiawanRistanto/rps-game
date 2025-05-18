@@ -1,202 +1,237 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
+import { classifyGesture } from "@/lib/gestures/gestureClassifier";
 
 declare global {
   interface Window {
     Hands: any;
+    Camera: any;
   }
 }
 
 export default function GamePage() {
   const webcamRef = useRef<Webcam>(null);
-  const handsRef = useRef<any>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const sfxRef = useRef({
+    countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
+    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
+    win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
+    lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
+    draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
+  });
+
   const [gesture, setGesture] = useState("");
-  const [isReady, setIsReady] = useState(false);
-  const [statusText, setStatusText] = useState("Loading model...");
-  const [countdown, setCountdown] = useState<number | null>(null);
+  const [score, setScore] = useState({ player: 0, ai: 0 });
+  const [result, setResult] = useState("");
+  const [isModelReady, setIsModelReady] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [showDetectingModal, setShowDetectingModal] = useState(false);
+
+  const roundPlayedRef = useRef(false);
+  const isActiveRef = useRef(true);
 
   useEffect(() => {
-    if (!window.Hands) return;
+    isActiveRef.current = true;
 
-    const hands = new window.Hands({
-      locateFile: (file: string) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-    });
+    const init = async () => {
+      if (!webcamRef.current || typeof window === "undefined") return;
+      const video = webcamRef.current.video;
 
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 0,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
+      const waitUntilVideoReady = () =>
+        new Promise<void>((resolve) => {
+          const check = () => {
+            if (video && video.readyState === 4) resolve();
+            else requestAnimationFrame(check);
+          };
+          check();
+        });
 
-    hands.onResults(onResults);
-    handsRef.current = hands;
-    setIsReady(true);
-    setStatusText("Model ready.");
+      await waitUntilVideoReady();
+
+      const handsReady = () =>
+        new Promise<void>((resolve) => {
+          const check = () => {
+            if (window.Hands && window.Camera) resolve();
+            else setTimeout(check, 50);
+          };
+          check();
+        });
+
+      await handsReady();
+
+      const hands = new window.Hands({
+        locateFile: (file: string) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+      });
+
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 0,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7,
+      });
+
+      hands.onResults((results: any) => {
+        setIsModelReady(true);
+
+        if (
+          results.multiHandLandmarks &&
+          results.multiHandLandmarks.length > 0 &&
+          isActiveRef.current &&
+          gameStarted &&
+          !roundPlayedRef.current
+        ) {
+          const landmarks = results.multiHandLandmarks[0];
+          const detectedGesture = classifyGesture(landmarks);
+          if (detectedGesture !== "unknown") {
+            sfxRef.current.detect?.play();
+            setGesture(detectedGesture);
+            playRound(detectedGesture);
+            roundPlayedRef.current = true;
+            setGameStarted(false);
+            setShowDetectingModal(false);
+            setShowResultModal(true);
+          }
+        }
+      });
+
+      const processFrame = async () => {
+        if (video && isActiveRef.current) {
+          await hands.send({ image: video });
+          requestAnimationFrame(processFrame);
+        }
+      };
+
+      requestAnimationFrame(processFrame);
+    };
+
+    init();
 
     return () => {
-      intervalRef.current && clearInterval(intervalRef.current);
-      handsRef.current = null;
+      isActiveRef.current = false;
     };
-  }, []);
+  }, [gameStarted]);
 
-  const onResults = (results: any) => {
-    if (results.multiHandLandmarks?.length) {
-      const gestureName = classifyGesture(results.multiHandLandmarks[0]);
-      if (gestureName) setGesture(gestureName);
+  const playRound = (playerMove: string) => {
+    const moves = ["rock", "paper", "scissors"];
+    const aiMove = moves[Math.floor(Math.random() * moves.length)];
+
+    let outcome = "";
+    if (playerMove === aiMove) {
+      outcome = "Draw";
+      sfxRef.current.draw?.play();
+    } else if (
+      (playerMove === "rock" && aiMove === "scissors") ||
+      (playerMove === "paper" && aiMove === "rock") ||
+      (playerMove === "scissors" && aiMove === "paper")
+    ) {
+      outcome = "You win!";
+      sfxRef.current.win?.play();
+      setScore((s) => ({ ...s, player: s.player + 1 }));
+    } else {
+      outcome = "AI wins!";
+      sfxRef.current.lose?.play();
+      setScore((s) => ({ ...s, ai: s.ai + 1 }));
     }
-  };
 
-  const startDetection = () => {
-    if (!handsRef.current || !webcamRef.current?.video) return;
-
-    intervalRef.current && clearInterval(intervalRef.current);
-
-    intervalRef.current = setInterval(async () => {
-      const video = webcamRef.current!.video!;
-      if (video.readyState === 4) {
-        await handsRef.current.send({ image: video });
-      }
-    }, 33); // ≈ 30 fps
-  };
-
-  const classifyGesture = (landmarks: any[]): string => {
-    const [index, middle, ring, pinky] = [
-      landmarks[8],
-      landmarks[12],
-      landmarks[16],
-      landmarks[20],
-    ];
-
-    const isFist =
-      index.y > landmarks[6].y &&
-      middle.y > landmarks[10].y &&
-      ring.y > landmarks[14].y &&
-      pinky.y > landmarks[18].y;
-
-    const isPalm =
-      index.y < landmarks[6].y &&
-      middle.y < landmarks[10].y &&
-      ring.y < landmarks[14].y &&
-      pinky.y < landmarks[18].y;
-
-    const isScissors =
-      index.y < landmarks[6].y &&
-      middle.y < landmarks[10].y &&
-      ring.y > landmarks[14].y &&
-      pinky.y > landmarks[18].y;
-
-    if (isFist) return "rock";
-    if (isPalm) return "paper";
-    if (isScissors) return "scissors";
-    return "";
+    setResult(`${playerMove} vs ${aiMove} → ${outcome}`);
   };
 
   const startGame = () => {
-    if (!isReady) return;
-
-    let count = 3;
+    setCountdown(3);
     setGesture("");
-    setStatusText("Get ready...");
-    setCountdown(count);
-    setResult(null);
+    setResult("");
+    setShowResultModal(false);
+    setShowDetectingModal(false);
+    roundPlayedRef.current = false;
 
     const interval = setInterval(() => {
-      count--;
-      if (count <= 0) {
-        clearInterval(interval);
-        setCountdown(null);
-        setGameStarted(true);
-        setStatusText("Detecting...");
-        startDetection();
-      } else {
-        setCountdown(count);
-      }
+      setCountdown((prev) => {
+        sfxRef.current.countdown?.play();
+        if (prev === 1) {
+          clearInterval(interval);
+          setCountdown(null);
+          setGameStarted(true);
+          setShowDetectingModal(true);
+          return null;
+        }
+        return (prev ?? 1) - 1;
+      });
     }, 1000);
   };
 
-  useEffect(() => {
-    if (gameStarted) {
-      const timeout = setTimeout(() => {
-        setGameStarted(false);
-        setStatusText("Result!");
-
-        if (gesture) {
-          const botChoices = ["rock", "paper", "scissors"];
-          const botChoice =
-            botChoices[Math.floor(Math.random() * botChoices.length)];
-
-          let outcome = "";
-          if (gesture === botChoice) outcome = "Draw!";
-          else if (
-            (gesture === "rock" && botChoice === "scissors") ||
-            (gesture === "paper" && botChoice === "rock") ||
-            (gesture === "scissors" && botChoice === "paper")
-          )
-            outcome = "You win!";
-          else outcome = "You lose!";
-
-          setResult(`You: ${gesture} | Bot: ${botChoice} → ${outcome}`);
-        } else {
-          setResult("No gesture detected!");
-        }
-
-        intervalRef.current && clearInterval(intervalRef.current);
-      }, 2000);
-
-      return () => clearTimeout(timeout);
-    }
-  }, [gameStarted, gesture]);
-
   return (
     <>
-      <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js" strategy="beforeInteractive" />
-      <div className="flex flex-col items-center min-h-screen bg-black text-white p-4">
-        <Webcam ref={webcamRef} mirrored className="w-72 rounded" />
+      <Script
+        src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
+        strategy="beforeInteractive"
+      />
+      <Script
+        src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"
+        strategy="beforeInteractive"
+      />
 
-        {/* Countdown */}
-        {countdown !== null && (
-          <p className="text-7xl text-red-500 font-extrabold mb-4 animate-ping">
-            {countdown}
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+        <Webcam
+          ref={webcamRef}
+          mirrored
+          className="rounded-lg shadow-lg w-full max-w-md"
+        />
+
+        <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
+          Detected Gesture: {gesture || "..."}
+        </h2>
+
+        <p className="mt-2">
+          Score: You {score.player} - AI {score.ai}
+        </p>
+
+        {countdown !== null ? (
+          <p className="text-3xl text-red-500 font-bold mb-2 animate-pulse">
+            Get Ready... {countdown}
           </p>
-        )}
-
-        {/* Gesture */}
-        {gesture && gameStarted && (
-          <p className="mt-2 text-2xl font-bold">{gesture}</p>
-        )}
-
-        {/* Result */}
-        {result && (
-          <p
-            className={`mt-6 text-center text-2xl font-extrabold drop-shadow-xl animate-pulse ${
-              result.includes("win")
-                ? "text-green-400"
-                : result.includes("Draw")
-                ? "text-yellow-400"
-                : "text-red-500"
-            }`}
+        ) : (
+          <button
+            onClick={startGame}
+            disabled={!isModelReady || countdown !== null || gameStarted}
+            className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
           >
-            {result}
-          </p>
+            {isModelReady ? "Start Game" : "Loading Model..."}
+          </button>
         )}
 
-        <button
-          onClick={startGame}
-          disabled={!isReady || countdown !== null}
-          className="mt-6 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-gray-600"
-        >
-          {isReady ? "Start Game" : "Loading..."}
-        </button>
+        {showResultModal && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
+            onClick={() => setShowResultModal(false)}
+          >
+            <div
+              className="bg-gray-800 p-6 rounded-lg max-w-sm w-full text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-xl font-bold mb-4">Round Result</h3>
+              <p className="mb-6 text-lg">{result}</p>
+              <button
+                onClick={() => setShowResultModal(false)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
 
-        <p className="text-sm mt-2">{statusText}</p>
+        {showDetectingModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+            <div className="bg-gray-900 p-6 rounded-lg text-center animate-pulse">
+              <h2 className="text-lg font-semibold">Mendeteksi gestur...</h2>
+              <p className="text-sm text-gray-300 mt-2">Arahkan tanganmu ke kamera</p>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
