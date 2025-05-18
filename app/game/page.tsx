@@ -1,200 +1,251 @@
+// app/game/page.tsx
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { Hands, HAND_CONNECTIONS } from "@mediapipe/hands";
-import { Camera } from "@mediapipe/camera_utils";
-import * as cam from "@mediapipe/camera_utils";
+import { useEffect, useRef, useState } from "react";
+import Webcam from "react-webcam";
+import Script from "next/script";
 import { db } from "../../lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
-const preloadAudio = (src: string) => {
-  const audio = new Audio(src);
-  audio.load();
-  return audio;
-};
+declare global {
+  interface Window {
+    Hands: any;
+    Camera: any;
+  }
+}
 
-export default function Game() {
-  const webcamRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+export default function GamePage() {
+  const webcamRef = useRef<Webcam>(null);
+  const [gesture, setGesture] = useState("");
+  const [score, setScore] = useState({ player: 0, ai: 0 });
+  const [result, setResult] = useState("");
+  const [isModelReady, setIsModelReady] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [statusText, setStatusText] = useState("Loading model...");
 
-  const [detecting, setDetecting] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const [score, setScore] = useState(0);
+  const roundPlayedRef = useRef(false);
+  const handsRef = useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Preload audios
-  const sfxDetect = useRef(preloadAudio("/sfx/detect.mp3"));
-  const sfxWin = useRef(preloadAudio("/sfx/win.mp3"));
-  const sfxLose = useRef(preloadAudio("/sfx/lose.mp3"));
-
-  // Fungsi simpan skor ke Firestore
-  const saveScoreToFirestore = async (scoreToSave: number) => {
-    try {
-      await addDoc(collection(db, "scores"), {
-        score: scoreToSave,
-        createdAt: serverTimestamp(),
-      });
-      console.log("Score saved:", scoreToSave);
-    } catch (error) {
-      console.error("Failed to save score:", error);
-    }
-  };
-
-  // MediaPipe Hands instance dan Camera instance
-  const handsRef = useRef<Hands | null>(null);
-  const cameraRef = useRef<Camera | null>(null);
-
-  // Fungsi process hasil deteksi tangan
-  const onResults = (results: any) => {
-    if (!canvasRef.current || !webcamRef.current) return;
-
-    const canvasCtx = canvasRef.current.getContext("2d");
-    if (!canvasCtx) return;
-
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    canvasCtx.drawImage(
-      results.image,
-      0,
-      0,
-      canvasRef.current.width,
-      canvasRef.current.height
-    );
-
-    // Gambarkan koneksi tangan
-    if (results.multiHandLandmarks) {
-      for (const landmarks of results.multiHandLandmarks) {
-        for (const connection of HAND_CONNECTIONS) {
-          const [startIdx, endIdx] = connection;
-          const start = landmarks[startIdx];
-          const end = landmarks[endIdx];
-          canvasCtx.beginPath();
-          canvasCtx.moveTo(
-            start.x * canvasRef.current.width,
-            start.y * canvasRef.current.height
-          );
-          canvasCtx.lineTo(
-            end.x * canvasRef.current.width,
-            end.y * canvasRef.current.height
-          );
-          canvasCtx.strokeStyle = "#00FF00";
-          canvasCtx.lineWidth = 2;
-          canvasCtx.stroke();
-        }
-        for (const landmark of landmarks) {
-          canvasCtx.beginPath();
-          canvasCtx.arc(
-            landmark.x * canvasRef.current.width,
-            landmark.y * canvasRef.current.height,
-            5,
-            0,
-            2 * Math.PI
-          );
-          canvasCtx.fillStyle = "#FF0000";
-          canvasCtx.fill();
-        }
-      }
-    }
-
-    canvasCtx.restore();
-
-    // Contoh klasifikasi gesture sederhana (placeholder)
-    // Kamu bisa ganti dengan logic klasifikasi gesture kamu
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      setResult("Gesture detected!");
-      if (!detecting) {
-        sfxDetect.current.play();
-      }
-      setDetecting(true);
-    } else {
-      setResult(null);
-      setDetecting(false);
-    }
-  };
+  const sfx = useRef({
+    countdown: new Audio("/sfx/countdown.mp3"),
+    detect: new Audio("/sfx/detect.mp3"),
+    win: new Audio("/sfx/win.mp3"),
+    lose: new Audio("/sfx/lose.mp3"),
+    draw: new Audio("/sfx/draw.mp3"),
+    save: new Audio("/sfx/save.mp3"),
+  });
 
   useEffect(() => {
-    if (!webcamRef.current || !canvasRef.current) return;
+    const interval = setInterval(() => {
+      if (window.Hands && webcamRef.current) {
+        clearInterval(interval);
 
-    handsRef.current = new Hands({
-      locateFile: (file) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-    });
-    handsRef.current.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7,
-    });
-    handsRef.current.onResults(onResults);
+        const hands = new window.Hands({
+          locateFile: (file: string) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+        });
 
-    cameraRef.current = new Camera(webcamRef.current, {
-      onFrame: async () => {
-        if (handsRef.current && webcamRef.current) {
-          await handsRef.current.send({ image: webcamRef.current });
-        }
-      },
-      width: 640,
-      height: 480,
-    });
-    cameraRef.current.start();
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 0,
+          minDetectionConfidence: 0.75,
+          minTrackingConfidence: 0.75,
+        });
+
+        hands.onResults((results: any) => {
+          if (
+            results.multiHandLandmarks &&
+            results.multiHandLandmarks.length > 0 &&
+            gameStarted &&
+            !roundPlayedRef.current
+          ) {
+            const gestureName = classifyGesture(results.multiHandLandmarks[0]);
+            if (gestureName) {
+              sfx.current.detect.play();
+              setGesture(gestureName);
+              playRound(gestureName);
+              roundPlayedRef.current = true;
+              setGameStarted(false);
+              setStatusText("Match result ready.");
+            }
+          }
+        });
+
+        handsRef.current = hands;
+        videoRef.current = webcamRef.current.video;
+        setIsModelReady(true);
+        setStatusText("Model ready.");
+        startDetectionLoop();
+      }
+    }, 100);
 
     return () => {
-      cameraRef.current?.stop();
-      handsRef.current?.close();
+      handsRef.current = null;
     };
   }, []);
 
-  // Fungsi simpan skor saat tombol ditekan (contoh)
+  const startDetectionLoop = () => {
+    const detect = async () => {
+      if (
+        handsRef.current &&
+        videoRef.current &&
+        videoRef.current.readyState === 4 &&
+        gameStarted &&
+        !roundPlayedRef.current
+      ) {
+        await handsRef.current.send({ image: videoRef.current });
+      }
+      requestAnimationFrame(detect);
+    };
+    requestAnimationFrame(detect);
+  };
+
+  const classifyGesture = (landmarks: any[]): string => {
+    const indexTip = landmarks[8];
+    const middleTip = landmarks[12];
+    const ringTip = landmarks[16];
+    const pinkyTip = landmarks[20];
+
+    const isFist =
+      indexTip.y > landmarks[6].y &&
+      middleTip.y > landmarks[10].y &&
+      ringTip.y > landmarks[14].y &&
+      pinkyTip.y > landmarks[18].y;
+
+    const isOpenPalm =
+      indexTip.y < landmarks[6].y &&
+      middleTip.y < landmarks[10].y &&
+      ringTip.y < landmarks[14].y &&
+      pinkyTip.y < landmarks[18].y;
+
+    const isScissors =
+      indexTip.y < landmarks[6].y &&
+      middleTip.y < landmarks[10].y &&
+      ringTip.y > landmarks[14].y &&
+      pinkyTip.y > landmarks[18].y;
+
+    if (isFist) return "rock";
+    if (isOpenPalm) return "paper";
+    if (isScissors) return "scissors";
+    return "";
+  };
+
+  const playRound = (playerMove: string) => {
+    const moves = ["rock", "paper", "scissors"];
+    const aiMove = moves[Math.floor(Math.random() * 3)];
+
+    let outcome = "";
+    if (playerMove === aiMove) {
+      outcome = "Draw";
+      sfx.current.draw.play();
+    } else if (
+      (playerMove === "rock" && aiMove === "scissors") ||
+      (playerMove === "paper" && aiMove === "rock") ||
+      (playerMove === "scissors" && aiMove === "paper")
+    ) {
+      outcome = "You win!";
+      sfx.current.win.play();
+      setScore((s) => ({ ...s, player: s.player + 1 }));
+    } else {
+      outcome = "AI wins!";
+      sfx.current.lose.play();
+      setScore((s) => ({ ...s, ai: s.ai + 1 }));
+    }
+
+    setResult(`${playerMove} vs ${aiMove} → ${outcome}`);
+  };
+
+  const startGame = () => {
+    setCountdown(3);
+    setGesture("");
+    setResult("");
+    roundPlayedRef.current = false;
+    setStatusText("Get ready...");
+
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        sfx.current.countdown.play();
+        if (prev === 1) {
+          clearInterval(interval);
+          setCountdown(null);
+          setGameStarted(true);
+          setStatusText("Mendeteksi gestur...");
+          return null;
+        }
+        return (prev ?? 1) - 1;
+      });
+    }, 1000);
+  };
+
   const handleSaveScore = async () => {
-    await saveScoreToFirestore(score);
-    alert("Score disimpan ke Firebase!");
+    try {
+      await addDoc(collection(db, "scores"), {
+        player: score.player,
+        ai: score.ai,
+        createdAt: serverTimestamp(),
+      });
+      sfx.current.save.play();
+      alert("Skor berhasil disimpan!");
+    } catch (err) {
+      alert("Gagal menyimpan skor.");
+      console.error(err);
+    }
   };
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Gesture RPS Game</h1>
-
-      <video
-        ref={webcamRef}
-        className="border rounded-md"
-        width="640"
-        height="480"
-        autoPlay
-        muted
-        playsInline
+    <>
+      <Script
+        src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
+        strategy="beforeInteractive"
       />
-      <canvas
-        ref={canvasRef}
-        className="absolute top-0 left-0"
-        width="640"
-        height="480"
-        style={{ position: "relative" }}
+      <Script
+        src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"
+        strategy="beforeInteractive"
       />
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+        <Webcam
+          ref={webcamRef}
+          mirrored
+          className="rounded-lg shadow-lg w-full max-w-md"
+        />
 
-      <div className="mt-4">
-        <button
-          onClick={() => {
-            setScore((s) => s + 1);
-            sfxWin.current.play();
-          }}
-          className="px-4 py-2 bg-green-500 text-white rounded-md mr-2"
-        >
-          Add Score +1 (Test)
-        </button>
+        <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
+          Detected Gesture: {gesture || "..."}
+        </h2>
+
+        <p className="mt-2">
+          Score: You {score.player} - AI {score.ai}
+        </p>
+
+        {countdown !== null ? (
+          <p className="text-3xl text-red-500 font-bold mb-2 animate-pulse">
+            Get Ready... {countdown}
+          </p>
+        ) : (
+          <button
+            onClick={startGame}
+            disabled={!isModelReady || gameStarted}
+            className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
+          >
+            {isModelReady ? "Mulai" : "Loading Model..."}
+          </button>
+        )}
+
+        <p className="mt-4 text-sm text-gray-300">{statusText}</p>
+
+        {result && (
+          <p className="mt-6 text-lg text-green-400 font-semibold">{result}</p>
+        )}
 
         <button
           onClick={handleSaveScore}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md"
+          className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg"
         >
           Simpan Skor ke Firebase
         </button>
       </div>
-
-      <div className="mt-4 text-lg font-semibold">
-        {detecting ? "Mendeteksi Gesture..." : "Tidak ada gesture"}
-      </div>
-
-      <div className="mt-2 text-xl font-bold">{result}</div>
-      <div className="mt-2 text-xl font-bold">Score: {score}</div>
-    </div>
+    </>
   );
 }
