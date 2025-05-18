@@ -73,7 +73,7 @@ export default function GamePage() {
 
         handsRef.current = hands;
         videoRef.current = webcamRef.current?.video || null;
-
+        
         setIsModelReady(true);
         setStatusText("Model ready.");
         startDetectionLoop();
@@ -89,14 +89,12 @@ export default function GamePage() {
     const detect = async () => {
       if (
         handsRef.current &&
-        videoRef.current &&
-        videoRef.current.readyState === 4 &&
+        videoRef.current?.readyState === 4 &&
         gameStarted &&
         !roundPlayedRef.current
       ) {
         await handsRef.current.send({ image: videoRef.current });
       }
-
       requestAnimationFrame(detect);
     };
     requestAnimationFrame(detect);
