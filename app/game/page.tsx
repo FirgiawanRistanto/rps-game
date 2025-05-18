@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
 
-// Global untuk MediaPipe Camera
 declare global {
   interface Window {
     Camera: any;
@@ -27,73 +26,70 @@ export default function GamePage() {
   const [isModelReady, setIsModelReady] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [scriptsLoaded, setScriptsLoaded] = useState(false);
 
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
+  const modelInitRef = useRef(false);
+
+  const initModel = () => {
+    if (modelInitRef.current || !scriptsLoaded) return;
+    modelInitRef.current = true;
+
+    const video = webcamRef.current?.video;
+    if (!video) return;
+
+    const hands = new window.Hands({
+      locateFile: (file: string) =>
+        `https://unpkg.com/@mediapipe/hands/${file}`,
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 0,
+      minDetectionConfidence: 0.75,
+      minTrackingConfidence: 0.75,
+    });
+
+    hands.onResults((results: any) => {
+      if (!isActiveRef.current || roundPlayedRef.current || !gameStarted) return;
+
+      setIsModelReady(true);
+
+      const landmarks = results.multiHandLandmarks?.[0];
+      if (landmarks) {
+        const gestureName = classifyGesture(landmarks);
+
+        if (gestureName) {
+          roundPlayedRef.current = true;
+          setGameStarted(false);
+          sfx.current.detect?.play();
+          setGesture(gestureName);
+
+          setTimeout(() => playRound(gestureName), 100);
+        }
+      }
+    });
+
+    const camera = new window.Camera(video, {
+      onFrame: async () => {
+        await hands.send({ image: video });
+      },
+      width: 640,
+      height: 480,
+    });
+
+    camera.start();
+  };
 
   useEffect(() => {
     isActiveRef.current = true;
-
-    const video = webcamRef.current?.video;
-    if (!video || typeof window === "undefined") return;
-
-    let hands: any;
-    let camera: any;
-
-    const waitForMediapipe = setInterval(() => {
-      if (window.Hands && window.Camera) {
-        clearInterval(waitForMediapipe);
-
-        hands = new window.Hands({
-          locateFile: (file: string) =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-        });
-
-        hands.setOptions({
-          maxNumHands: 1,
-          modelComplexity: 0,
-          minDetectionConfidence: 0.75,
-          minTrackingConfidence: 0.75,
-        });
-
-        hands.onResults((results: any) => {
-          if (!isActiveRef.current || roundPlayedRef.current || !gameStarted) return;
-
-          setIsModelReady(true);
-
-          const landmarks = results.multiHandLandmarks?.[0];
-          if (landmarks) {
-            const gestureName = classifyGesture(landmarks);
-
-            if (gestureName) {
-              roundPlayedRef.current = true;
-              setGameStarted(false);
-              sfx.current.detect?.play();
-              setGesture(gestureName);
-
-              setTimeout(() => playRound(gestureName), 100);
-            }
-          }
-        });
-
-        camera = new window.Camera(video, {
-          onFrame: async () => {
-            await hands.send({ image: video });
-          },
-          width: 640,
-          height: 480,
-        });
-
-        camera.start();
-      }
-    }, 100);
+    if (scriptsLoaded) initModel();
 
     return () => {
       isActiveRef.current = false;
-      clearInterval(waitForMediapipe);
-      if (camera) camera.stop();
     };
-  }, [gameStarted]);
+  }, [scriptsLoaded]);
 
   const classifyGesture = (landmarks: any[]): string => {
     const indexTip = landmarks[8];
@@ -181,14 +177,16 @@ export default function GamePage() {
 
   return (
     <>
-      {/* CDN Scripts */}
+      {/* OPTIMIZED CDN LOAD */}
       <Script
-        src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
+        src="https://unpkg.com/@mediapipe/hands/hands.min.js"
         strategy="beforeInteractive"
+        onLoad={() => setScriptsLoaded((prev) => !prev ? true : prev)}
       />
       <Script
-        src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"
+        src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"
         strategy="beforeInteractive"
+        onLoad={() => setScriptsLoaded((prev) => !prev ? true : prev)}
       />
 
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
