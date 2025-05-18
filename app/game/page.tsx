@@ -173,11 +173,11 @@ export default function GamePage() {
     <>
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
-        strategy="lazyOnload"
+        strategy="beforeInteractive"
       />
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"
-        strategy="lazyOnload"
+        strategy="beforeInteractive"
       />
 
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
