@@ -1,191 +1,200 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import Webcam from "react-webcam";
 
-export default function GamePage() {
-  const webcamRef = useRef<Webcam>(null);
-  const [gesture, setGesture] = useState("");
-  const [result, setResult] = useState("");
-  const [score, setScore] = useState({ player: 0, ai: 0 });
-  const [loading, setLoading] = useState(true);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [gameStarted, setGameStarted] = useState(false);
+import React, { useEffect, useRef, useState } from "react";
+import { Hands, HAND_CONNECTIONS } from "@mediapipe/hands";
+import { Camera } from "@mediapipe/camera_utils";
+import * as cam from "@mediapipe/camera_utils";
+import { db } from "../../lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
-  const sfx = useRef({
-    countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
-    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
-    win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
-    lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
-    draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
-  });
+const preloadAudio = (src: string) => {
+  const audio = new Audio(src);
+  audio.load();
+  return audio;
+};
 
-  const roundPlayedRef = useRef(false);
-  const cameraRef = useRef<any>(null);
-  const handsRef = useRef<any>(null);
+export default function Game() {
+  const webcamRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const initModel = async () => {
-    const { Hands } = await import("@mediapipe/hands");
-    const { Camera } = await import("@mediapipe/camera_utils");
+  const [detecting, setDetecting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [score, setScore] = useState(0);
 
-    const video = webcamRef.current?.video;
-    if (!video) return;
+  // Preload audios
+  const sfxDetect = useRef(preloadAudio("/sfx/detect.mp3"));
+  const sfxWin = useRef(preloadAudio("/sfx/win.mp3"));
+  const sfxLose = useRef(preloadAudio("/sfx/lose.mp3"));
 
-    const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+  // Fungsi simpan skor ke Firestore
+  const saveScoreToFirestore = async (scoreToSave: number) => {
+    try {
+      await addDoc(collection(db, "scores"), {
+        score: scoreToSave,
+        createdAt: serverTimestamp(),
+      });
+      console.log("Score saved:", scoreToSave);
+    } catch (error) {
+      console.error("Failed to save score:", error);
+    }
+  };
+
+  // MediaPipe Hands instance dan Camera instance
+  const handsRef = useRef<Hands | null>(null);
+  const cameraRef = useRef<Camera | null>(null);
+
+  // Fungsi process hasil deteksi tangan
+  const onResults = (results: any) => {
+    if (!canvasRef.current || !webcamRef.current) return;
+
+    const canvasCtx = canvasRef.current.getContext("2d");
+    if (!canvasCtx) return;
+
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    canvasCtx.drawImage(
+      results.image,
+      0,
+      0,
+      canvasRef.current.width,
+      canvasRef.current.height
+    );
+
+    // Gambarkan koneksi tangan
+    if (results.multiHandLandmarks) {
+      for (const landmarks of results.multiHandLandmarks) {
+        for (const connection of HAND_CONNECTIONS) {
+          const [startIdx, endIdx] = connection;
+          const start = landmarks[startIdx];
+          const end = landmarks[endIdx];
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(
+            start.x * canvasRef.current.width,
+            start.y * canvasRef.current.height
+          );
+          canvasCtx.lineTo(
+            end.x * canvasRef.current.width,
+            end.y * canvasRef.current.height
+          );
+          canvasCtx.strokeStyle = "#00FF00";
+          canvasCtx.lineWidth = 2;
+          canvasCtx.stroke();
+        }
+        for (const landmark of landmarks) {
+          canvasCtx.beginPath();
+          canvasCtx.arc(
+            landmark.x * canvasRef.current.width,
+            landmark.y * canvasRef.current.height,
+            5,
+            0,
+            2 * Math.PI
+          );
+          canvasCtx.fillStyle = "#FF0000";
+          canvasCtx.fill();
+        }
+      }
+    }
+
+    canvasCtx.restore();
+
+    // Contoh klasifikasi gesture sederhana (placeholder)
+    // Kamu bisa ganti dengan logic klasifikasi gesture kamu
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      setResult("Gesture detected!");
+      if (!detecting) {
+        sfxDetect.current.play();
+      }
+      setDetecting(true);
+    } else {
+      setResult(null);
+      setDetecting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!webcamRef.current || !canvasRef.current) return;
+
+    handsRef.current = new Hands({
+      locateFile: (file) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
     });
-
-    hands.setOptions({
+    handsRef.current.setOptions({
       maxNumHands: 1,
-      modelComplexity: 0,
+      modelComplexity: 1,
       minDetectionConfidence: 0.7,
       minTrackingConfidence: 0.7,
     });
+    handsRef.current.onResults(onResults);
 
-    hands.onResults((results: any) => {
-      if (!gameStarted || roundPlayedRef.current) return;
-
-      const landmarks = results.multiHandLandmarks?.[0];
-      if (landmarks) {
-        const move = classifyGesture(landmarks);
-        if (move) {
-          roundPlayedRef.current = true;
-          setGameStarted(false);
-          sfx.current.detect?.play();
-          setGesture(move);
-          setTimeout(() => playRound(move), 100);
-        }
-      }
-    });
-
-    const camera = new Camera(video, {
+    cameraRef.current = new Camera(webcamRef.current, {
       onFrame: async () => {
-        await hands.send({ image: video });
+        if (handsRef.current && webcamRef.current) {
+          await handsRef.current.send({ image: webcamRef.current });
+        }
       },
       width: 640,
       height: 480,
     });
+    cameraRef.current.start();
 
-    handsRef.current = hands;
-    cameraRef.current = camera;
-
-    camera.start();
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      initModel();
-    }
     return () => {
-      cameraRef.current?.stop?.();
+      cameraRef.current?.stop();
+      handsRef.current?.close();
     };
   }, []);
 
-  const classifyGesture = (landmarks: any[]) => {
-    const index = landmarks[8];
-    const middle = landmarks[12];
-    const ring = landmarks[16];
-    const pinky = landmarks[20];
-
-    const isFist =
-      index.y > landmarks[6].y &&
-      middle.y > landmarks[10].y &&
-      ring.y > landmarks[14].y &&
-      pinky.y > landmarks[18].y;
-
-    const isPalm =
-      index.y < landmarks[6].y &&
-      middle.y < landmarks[10].y &&
-      ring.y < landmarks[14].y &&
-      pinky.y < landmarks[18].y;
-
-    const isScissors =
-      index.y < landmarks[6].y &&
-      middle.y < landmarks[10].y &&
-      ring.y > landmarks[14].y &&
-      pinky.y > landmarks[18].y;
-
-    if (isFist) return "rock";
-    if (isPalm) return "paper";
-    if (isScissors) return "scissors";
-    return "";
-  };
-
-  const playRound = (playerMove: string) => {
-    const aiMove = ["rock", "paper", "scissors"][Math.floor(Math.random() * 3)];
-    let outcome = "";
-
-    if (playerMove === aiMove) {
-      outcome = "Draw";
-      sfx.current.draw?.play();
-    } else if (
-      (playerMove === "rock" && aiMove === "scissors") ||
-      (playerMove === "paper" && aiMove === "rock") ||
-      (playerMove === "scissors" && aiMove === "paper")
-    ) {
-      outcome = "You win!";
-      sfx.current.win?.play();
-      setScore((prev) => ({ ...prev, player: prev.player + 1 }));
-    } else {
-      outcome = "AI wins!";
-      sfx.current.lose?.play();
-      setScore((prev) => ({ ...prev, ai: prev.ai + 1 }));
-    }
-
-    setResult(`${playerMove} vs ${aiMove} → ${outcome}`);
-    setTimeout(() => {
-      setGesture("");
-      roundPlayedRef.current = false;
-    }, 1500);
-  };
-
-  const startGame = () => {
-    setCountdown(3);
-    setResult("");
-    setGesture("");
-    roundPlayedRef.current = false;
-
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev === 1) {
-          clearInterval(interval);
-          setCountdown(null);
-          setGameStarted(true);
-          return null;
-        }
-        sfx.current.countdown?.play();
-        return (prev ?? 1) - 1;
-      });
-    }, 1000);
+  // Fungsi simpan skor saat tombol ditekan (contoh)
+  const handleSaveScore = async () => {
+    await saveScoreToFirestore(score);
+    alert("Score disimpan ke Firebase!");
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-      <Webcam ref={webcamRef} mirrored className="rounded-lg shadow-lg w-full max-w-md" />
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4">Gesture RPS Game</h1>
 
-      <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
-        {gesture
-          ? `Detected: ${gesture.toUpperCase()}`
-          : countdown !== null
-          ? `Get Ready... ${countdown}`
-          : gameStarted
-          ? "Mendeteksi gestur..."
-          : ""}
-      </h2>
+      <video
+        ref={webcamRef}
+        className="border rounded-md"
+        width="640"
+        height="480"
+        autoPlay
+        muted
+        playsInline
+      />
+      <canvas
+        ref={canvasRef}
+        className="absolute top-0 left-0"
+        width="640"
+        height="480"
+        style={{ position: "relative" }}
+      />
 
-      <p className="mt-2">Score: You {score.player} - AI {score.ai}</p>
+      <div className="mt-4">
+        <button
+          onClick={() => {
+            setScore((s) => s + 1);
+            sfxWin.current.play();
+          }}
+          className="px-4 py-2 bg-green-500 text-white rounded-md mr-2"
+        >
+          Add Score +1 (Test)
+        </button>
 
-      <button
-        onClick={startGame}
-        disabled={loading || countdown !== null || gameStarted}
-        className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
-      >
-        {loading ? "Loading Model..." : "Start Game"}
-      </button>
+        <button
+          onClick={handleSaveScore}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md"
+        >
+          Simpan Skor ke Firebase
+        </button>
+      </div>
 
-      {result && (
-        <p className="mt-6 text-lg text-green-400 font-semibold">{result}</p>
-      )}
+      <div className="mt-4 text-lg font-semibold">
+        {detecting ? "Mendeteksi Gesture..." : "Tidak ada gesture"}
+      </div>
+
+      <div className="mt-2 text-xl font-bold">{result}</div>
+      <div className="mt-2 text-xl font-bold">Score: {score}</div>
     </div>
   );
 }
