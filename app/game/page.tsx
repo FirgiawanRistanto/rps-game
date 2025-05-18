@@ -232,9 +232,18 @@ export default function GamePage() {
 
         {showDetectingModal && (
           <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
-            <div className="bg-gray-900 p-6 rounded-lg text-center animate-pulse">
+            <div className="bg-gray-900 p-6 rounded-lg text-center space-y-4 animate-fade-in">
+              <div className="flex justify-center">
+                <div className="w-16 h-16 border-4 border-blue-500 border-dotted rounded-full animate-spin-slow"></div>
+              </div>
               <h2 className="text-lg font-semibold">Mendeteksi gestur...</h2>
-              <p className="text-sm text-gray-300 mt-2">Arahkan tanganmu ke kamera</p>
+              <p className="text-sm text-gray-300">Arahkan tanganmu ke kamera</p>
+              <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 transition-all duration-1000 ease-linear"
+                  style={{ width: gameStarted ? "100%" : "0%" }}
+                ></div>
+              </div>
             </div>
           </div>
         )}
