@@ -14,7 +14,6 @@ export default function GamePage() {
   const webcamRef = useRef<Webcam>(null);
   const sfxRef = useRef({
     countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
-    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
     win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
     lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
     draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
@@ -86,7 +85,6 @@ export default function GamePage() {
           const gestureName = classifyGesture(landmarks);
 
           if (gestureName && gestureName !== "unknown") {
-            sfxRef.current.detect?.play();
             setGesture(gestureName);
             playRound(gestureName);
             roundPlayedRef.current = true;
