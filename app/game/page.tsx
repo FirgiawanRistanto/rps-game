@@ -2,9 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
-import { classifyGesture } from "@/lib/gestures/gestureClassifier";
-import { smoothGesture, resetGestureHistory } from "@/lib/gestures/smoothing";
-
 
 declare global {
   interface Window {
@@ -17,6 +14,7 @@ export default function GamePage() {
   const webcamRef = useRef<Webcam>(null);
   const sfxRef = useRef({
     countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
+    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
     win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
     lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
     draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
@@ -71,13 +69,12 @@ export default function GamePage() {
       hands.setOptions({
         maxNumHands: 1,
         modelComplexity: 0,
-        minDetectionConfidence: 0.7,
-        minTrackingConfidence: 0.7,
+        minDetectionConfidence: 0.75,
+        minTrackingConfidence: 0.75,
       });
 
       hands.onResults((results: any) => {
         setIsModelReady(true);
-
         if (
           results.multiHandLandmarks &&
           results.multiHandLandmarks.length > 0 &&
@@ -86,13 +83,12 @@ export default function GamePage() {
           !roundPlayedRef.current
         ) {
           const landmarks = results.multiHandLandmarks[0];
-          const detectedGesture = classifyGesture(landmarks);
+          const gestureName = classifyGesture(landmarks);
 
-          const stableGesture = smoothGesture(detectedGesture);
-
-          if (stableGesture !== "unknown") {
-            setGesture(stableGesture);
-            playRound(stableGesture);
+          if (gestureName && gestureName !== "unknown") {
+            sfxRef.current.detect?.play();
+            setGesture(gestureName);
+            playRound(gestureName);
             roundPlayedRef.current = true;
             setGameStarted(false);
             setShowDetectingModal(false);
@@ -100,7 +96,6 @@ export default function GamePage() {
           }
         }
       });
-
 
       const processFrame = async () => {
         if (video && isActiveRef.current) {
@@ -119,9 +114,31 @@ export default function GamePage() {
     };
   }, [gameStarted]);
 
+  const classifyGesture = (landmarks: any[]): string => {
+    if (!landmarks || landmarks.length !== 21) return "unknown";
+
+    const [indexTip, middleTip, ringTip, pinkyTip] = [
+      landmarks[8],
+      landmarks[12],
+      landmarks[16],
+      landmarks[20],
+    ];
+
+    const indexFolded = indexTip.y > landmarks[6].y;
+    const middleFolded = middleTip.y > landmarks[10].y;
+    const ringFolded = ringTip.y > landmarks[14].y;
+    const pinkyFolded = pinkyTip.y > landmarks[18].y;
+
+    if (indexFolded && middleFolded && ringFolded && pinkyFolded) return "rock";
+    if (!indexFolded && !middleFolded && !ringFolded && !pinkyFolded) return "paper";
+    if (!indexFolded && !middleFolded && ringFolded && pinkyFolded) return "scissors";
+
+    return "unknown";
+  };
+
   const playRound = (playerMove: string) => {
     const moves = ["rock", "paper", "scissors"];
-    const aiMove = moves[Math.floor(Math.random() * moves.length)];
+    const aiMove = moves[Math.floor(Math.random() * 3)];
 
     let outcome = "";
     if (playerMove === aiMove) {
@@ -151,11 +168,10 @@ export default function GamePage() {
     setShowResultModal(false);
     setShowDetectingModal(false);
     roundPlayedRef.current = false;
-    resetGestureHistory();
 
     const interval = setInterval(() => {
-      sfxRef.current.countdown?.play();
       setCountdown((prev) => {
+        sfxRef.current.countdown?.play();
         if (prev === 1) {
           clearInterval(interval);
           setCountdown(null);
@@ -168,37 +184,18 @@ export default function GamePage() {
     }, 1000);
   };
 
-
   return (
     <>
-      <Script
-        src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
-        strategy="beforeInteractive"
-      />
-      <Script
-        src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"
-        strategy="beforeInteractive"
-      />
+      <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js" strategy="beforeInteractive" />
+      <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js" strategy="beforeInteractive" />
 
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-        <Webcam
-          ref={webcamRef}
-          mirrored
-          className="rounded-lg shadow-lg w-full max-w-md"
-        />
-
-        <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
-          Detected Gesture: {gesture || "..."}
-        </h2>
-
-        <p className="mt-2">
-          Score: You {score.player} - AI {score.ai}
-        </p>
+        <Webcam ref={webcamRef} mirrored className="rounded-lg shadow-lg w-full max-w-md" />
+        <h2 className="mt-4 text-yellow-400 text-2xl font-bold">Detected Gesture: {gesture || "..."}</h2>
+        <p className="mt-2">Score: You {score.player} - AI {score.ai}</p>
 
         {countdown !== null ? (
-          <p className="text-3xl text-red-500 font-bold mb-2 animate-pulse">
-            Get Ready... {countdown}
-          </p>
+          <p className="text-4xl text-red-500 font-bold mb-2 animate-pulse">Get Ready... {countdown}</p>
         ) : (
           <button
             onClick={startGame}
@@ -210,22 +207,11 @@ export default function GamePage() {
         )}
 
         {showResultModal && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
-            onClick={() => setShowResultModal(false)}
-          >
-            <div
-              className="bg-gray-800 p-6 rounded-lg max-w-sm w-full text-center"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50" onClick={() => setShowResultModal(false)}>
+            <div className="bg-gray-800 p-6 rounded-lg max-w-sm w-full text-center animate-fade-in" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-xl font-bold mb-4">Round Result</h3>
               <p className="mb-6 text-lg">{result}</p>
-              <button
-                onClick={() => setShowResultModal(false)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
-              >
-                Close
-              </button>
+              <button onClick={() => setShowResultModal(false)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white">Close</button>
             </div>
           </div>
         )}
@@ -239,10 +225,7 @@ export default function GamePage() {
               <h2 className="text-lg font-semibold">Mendeteksi gestur...</h2>
               <p className="text-sm text-gray-300">Arahkan tanganmu ke kamera</p>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 transition-all duration-1000 ease-linear"
-                  style={{ width: gameStarted ? "100%" : "0%" }}
-                ></div>
+                <div className="h-full bg-blue-500 transition-all duration-1000 ease-linear" style={{ width: gameStarted ? "100%" : "0%" }}></div>
               </div>
             </div>
           </div>
