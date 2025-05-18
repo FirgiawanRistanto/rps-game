@@ -22,7 +22,6 @@ export default function GamePage() {
 
   const sfxRef = useRef({
     countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
-    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
     win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
     lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
     draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
@@ -127,7 +126,6 @@ export default function GamePage() {
       const stableGesture = smoothGesture(detectedGesture);
 
       if (stableGesture !== "unknown") {
-        sfxRef.current.detect?.play();
         setGesture(stableGesture);
         playRound(stableGesture);
         roundPlayedRef.current = true;
