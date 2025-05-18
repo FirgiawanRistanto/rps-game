@@ -83,14 +83,30 @@ export default function GamePage() {
         videoRef.current = webcamRef.current.video;
         setIsModelReady(true);
         setStatusText("Model ready.");
-        startDetectionLoop();
+
+        // ✅ Mulai loop deteksi hanya sekali
+        const detect = async () => {
+          if (
+            handsRef.current &&
+            videoRef.current &&
+            videoRef.current.readyState === 4 &&
+            gameStarted &&
+            !roundPlayedRef.current
+          ) {
+            await handsRef.current.send({ image: videoRef.current });
+          }
+          requestAnimationFrame(detect);
+        };
+        requestAnimationFrame(detect);
       }
     }, 100);
 
     return () => {
+      clearInterval(interval);
       handsRef.current = null;
     };
-  }, [gameStarted]); // dependensi diperbaiki
+  }, []); // ✅ Kosongin dependency array → hanya jalan sekali saat mount
+
 
   const startDetectionLoop = () => {
     const detect = async () => {
