@@ -11,13 +11,6 @@ declare global {
   }
 }
 
-// Global untuk MediaPipe Camera
-declare global {
-  interface Window {
-    Camera: any;
-  }
-}
-
 export default function GamePage() {
   const webcamRef = useRef<Webcam>(null);
   const sfxRef = useRef({
