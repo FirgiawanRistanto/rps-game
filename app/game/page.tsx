@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
 
+// Global untuk MediaPipe Camera
 declare global {
   interface Window {
     Camera: any;
@@ -18,25 +19,24 @@ export default function GamePage() {
   const [isModelReady, setIsModelReady] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [showResultModal, setShowResultModal] = useState(false);
-  const [showDetectingModal, setShowDetectingModal] = useState(false);
 
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
 
-  // Audio effects
+  // Audio effects (gunakan useRef untuk menghindari re-inisialisasi)
   const sfx = useRef({
-    countdown: typeof window !== "undefined" ? new Audio("/sfx/countdown.mp3") : undefined,
-    detect: typeof window !== "undefined" ? new Audio("/sfx/detect.mp3") : undefined,
-    win: typeof window !== "undefined" ? new Audio("/sfx/win.mp3") : undefined,
-    lose: typeof window !== "undefined" ? new Audio("/sfx/lose.mp3") : undefined,
-    draw: typeof window !== "undefined" ? new Audio("/sfx/draw.mp3") : undefined,
+    countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
+    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
+    win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
+    lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
+    draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
   });
 
   useEffect(() => {
     isActiveRef.current = true;
 
     if (!webcamRef.current || typeof window === "undefined") return;
+
     const video = webcamRef.current.video;
     if (!video) return;
 
@@ -66,19 +66,18 @@ export default function GamePage() {
           if (
             results.multiHandLandmarks &&
             results.multiHandLandmarks.length > 0 &&
+            gameStarted &&
             !roundPlayedRef.current
           ) {
             const landmarks = results.multiHandLandmarks[0];
             const gestureName = classifyGesture(landmarks);
 
-            if (gestureName && gameStarted) {
+            if (gestureName) {
               sfx.current.detect?.play();
               setGesture(gestureName);
               playRound(gestureName);
               roundPlayedRef.current = true;
               setGameStarted(false);
-              setShowDetectingModal(false);
-              setShowResultModal(true);
             }
           }
         });
@@ -89,7 +88,6 @@ export default function GamePage() {
           },
           width: 640,
           height: 480,
-          fps: 60, // ✅ Boost FPS
         });
 
         camera.start();
@@ -163,8 +161,6 @@ export default function GamePage() {
     setCountdown(3);
     setGesture("");
     setResult("");
-    setShowResultModal(false);
-    setShowDetectingModal(false);
     roundPlayedRef.current = false;
 
     const interval = setInterval(() => {
@@ -174,7 +170,6 @@ export default function GamePage() {
           clearInterval(interval);
           setCountdown(null);
           setGameStarted(true);
-          setShowDetectingModal(true);
           return null;
         }
         return (prev ?? 1) - 1;
@@ -184,6 +179,7 @@ export default function GamePage() {
 
   return (
     <>
+      {/* CDN Script Loader */}
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
         strategy="beforeInteractive"
@@ -208,47 +204,24 @@ export default function GamePage() {
           Score: You {score.player} - AI {score.ai}
         </p>
 
-        {countdown !== null ? (
-          <p className="text-3xl text-red-500 font-bold mb-2 animate-pulse">
-            Get Ready... {countdown}
-          </p>
-        ) : (
-          <button
-            onClick={startGame}
-            disabled={!isModelReady || countdown !== null || gameStarted}
-            className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
-          >
-            {isModelReady ? "Start Game" : "Loading Model..."}
-          </button>
-        )}
+        <button
+          onClick={startGame}
+          disabled={!isModelReady || countdown !== null || gameStarted}
+          className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
+        >
+          {!isModelReady
+            ? "Loading Model..."
+            : countdown !== null
+            ? `Get Ready... ${countdown}`
+            : gameStarted
+            ? "Mendeteksi Gestur..."
+            : "Start Game"}
+        </button>
 
-        {showResultModal && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
-            onClick={() => setShowResultModal(false)}
-          >
-            <div
-              className="bg-gray-800 p-6 rounded-lg max-w-sm w-full text-center"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-xl font-bold mb-4">Round Result</h3>
-              <p className="mb-6 text-lg">{result}</p>
-              <button
-                onClick={() => setShowResultModal(false)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        {showDetectingModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
-            <div className="bg-gray-900 p-6 rounded-lg text-center animate-pulse">
-              <h2 className="text-lg font-semibold">Mendeteksi gestur...</h2>
-              <p className="text-sm text-gray-300 mt-2">Arahkan tanganmu ke kamera</p>
-            </div>
+        {result && (
+          <div className="mt-6 text-center bg-gray-800 p-4 rounded-lg shadow-lg">
+            <h3 className="text-lg font-semibold mb-2">Hasil Ronde</h3>
+            <p className="text-xl">{result}</p>
           </div>
         )}
       </div>
