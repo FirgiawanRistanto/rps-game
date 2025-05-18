@@ -13,6 +13,14 @@ declare global {
 
 export default function GamePage() {
   const webcamRef = useRef<Webcam>(null);
+  const sfx = useRef({
+    countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
+    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
+    win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
+    lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
+    draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
+  });
+
   const [gesture, setGesture] = useState("");
   const [score, setScore] = useState({ player: 0, ai: 0 });
   const [result, setResult] = useState("");
@@ -23,29 +31,18 @@ export default function GamePage() {
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
 
-  // Audio effects (gunakan useRef untuk menghindari re-inisialisasi)
-  const sfx = useRef({
-    countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
-    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : null,
-    win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : null,
-    lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : null,
-    draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : null,
-  });
-
   useEffect(() => {
     isActiveRef.current = true;
 
-    if (!webcamRef.current || typeof window === "undefined") return;
-
-    const video = webcamRef.current.video;
-    if (!video) return;
+    const video = webcamRef.current?.video;
+    if (!video || typeof window === "undefined") return;
 
     let hands: any;
     let camera: any;
 
-    const interval = setInterval(() => {
+    const waitForMediapipe = setInterval(() => {
       if (window.Hands && window.Camera) {
-        clearInterval(interval);
+        clearInterval(waitForMediapipe);
 
         hands = new window.Hands({
           locateFile: (file: string) =>
@@ -60,24 +57,21 @@ export default function GamePage() {
         });
 
         hands.onResults((results: any) => {
-          if (!isActiveRef.current) return;
+          if (!isActiveRef.current || roundPlayedRef.current || !gameStarted) return;
+
           setIsModelReady(true);
 
-          if (
-            results.multiHandLandmarks &&
-            results.multiHandLandmarks.length > 0 &&
-            gameStarted &&
-            !roundPlayedRef.current
-          ) {
-            const landmarks = results.multiHandLandmarks[0];
+          const landmarks = results.multiHandLandmarks?.[0];
+          if (landmarks) {
             const gestureName = classifyGesture(landmarks);
 
             if (gestureName) {
-              sfx.current.detect?.play();
-              setGesture(gestureName);
-              playRound(gestureName);
               roundPlayedRef.current = true;
               setGameStarted(false);
+              sfx.current.detect?.play();
+              setGesture(gestureName);
+
+              setTimeout(() => playRound(gestureName), 100);
             }
           }
         });
@@ -96,7 +90,7 @@ export default function GamePage() {
 
     return () => {
       isActiveRef.current = false;
-      clearInterval(interval);
+      clearInterval(waitForMediapipe);
       if (camera) camera.stop();
     };
   }, [gameStarted]);
@@ -137,6 +131,7 @@ export default function GamePage() {
     const aiMove = moves[Math.floor(Math.random() * 3)];
 
     let outcome = "";
+
     if (playerMove === aiMove) {
       outcome = "Draw";
       sfx.current.draw?.play();
@@ -155,6 +150,11 @@ export default function GamePage() {
     }
 
     setResult(`${playerMove} vs ${aiMove} → ${outcome}`);
+
+    setTimeout(() => {
+      setGesture("");
+      roundPlayedRef.current = false;
+    }, 1500);
   };
 
   const startGame = () => {
@@ -166,12 +166,14 @@ export default function GamePage() {
     const interval = setInterval(() => {
       setCountdown((prev) => {
         sfx.current.countdown?.play();
+
         if (prev === 1) {
           clearInterval(interval);
           setCountdown(null);
           setGameStarted(true);
           return null;
         }
+
         return (prev ?? 1) - 1;
       });
     }, 1000);
@@ -179,7 +181,7 @@ export default function GamePage() {
 
   return (
     <>
-      {/* CDN Script Loader */}
+      {/* CDN Scripts */}
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
         strategy="beforeInteractive"
@@ -197,7 +199,13 @@ export default function GamePage() {
         />
 
         <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
-          Detected Gesture: {gesture || "..."}
+          {gesture
+            ? `Detected: ${gesture.toUpperCase()}`
+            : countdown !== null
+            ? `Get Ready... ${countdown}`
+            : gameStarted
+            ? "Mendeteksi gestur..."
+            : ""}
         </h2>
 
         <p className="mt-2">
@@ -209,20 +217,11 @@ export default function GamePage() {
           disabled={!isModelReady || countdown !== null || gameStarted}
           className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
         >
-          {!isModelReady
-            ? "Loading Model..."
-            : countdown !== null
-            ? `Get Ready... ${countdown}`
-            : gameStarted
-            ? "Mendeteksi Gestur..."
-            : "Start Game"}
+          {isModelReady ? "Start Game" : "Loading Model..."}
         </button>
 
         {result && (
-          <div className="mt-6 text-center bg-gray-800 p-4 rounded-lg shadow-lg">
-            <h3 className="text-lg font-semibold mb-2">Hasil Ronde</h3>
-            <p className="text-xl">{result}</p>
-          </div>
+          <p className="mt-6 text-lg text-green-400 font-semibold">{result}</p>
         )}
       </div>
     </>
