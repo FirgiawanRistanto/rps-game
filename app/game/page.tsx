@@ -1,9 +1,8 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
 
-// supaya TypeScript nggak error pas akses window.Camera
 declare global {
   interface Window {
     Camera: any;
@@ -16,100 +15,114 @@ export default function GamePage() {
   const [score, setScore] = useState({ player: 0, ai: 0 });
   const [result, setResult] = useState("");
   const [isModelReady, setIsModelReady] = useState(false);
-  const [gameStarted, setGameStarted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
 
+  const gameStartedRef = useRef(false);
   const roundPlayedRef = useRef(false);
-  const isActiveRef = useRef(true);
+  const handsRef = useRef<any>(null);
+  const cameraRef = useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const setupModel = useCallback(() => {
+    if ((window as any).Hands && window.Camera && webcamRef.current?.video) {
+      const hands = new (window as any).Hands({
+        locateFile: (file: string) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+      });
+
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 0,
+        minDetectionConfidence: 0.8,
+        minTrackingConfidence: 0.8,
+      });
+
+      hands.onResults((results: any) => {
+        if (
+          results.multiHandLandmarks &&
+          results.multiHandLandmarks.length > 0 &&
+          gameStartedRef.current &&
+          !roundPlayedRef.current
+        ) {
+          const landmarks = results.multiHandLandmarks[0];
+          const gestureName = classifyGesture(landmarks);
+
+          if (gestureName) {
+            setGesture(gestureName);
+            playRound(gestureName);
+            roundPlayedRef.current = true;
+            gameStartedRef.current = false;
+            setIsDetecting(false);
+            setShowResultModal(true);
+          }
+        }
+      });
+
+      const video = webcamRef.current.video;
+      videoRef.current = video;
+
+      const camera = new window.Camera(video, {
+        onFrame: async () => {
+          await hands.send({ image: video });
+        },
+        width: 480,
+        height: 360,
+      });
+
+      camera.start();
+
+      handsRef.current = hands;
+      cameraRef.current = camera;
+
+      setIsModelReady(true);
+    }
+  }, []);
 
   useEffect(() => {
-    isActiveRef.current = true;
-
-    if (!webcamRef.current || typeof window === "undefined") return;
-
-    const video = webcamRef.current.video;
-    if (!video) return;
-
-    let hands: any;
-    let camera: any;
-
-    const interval = setInterval(() => {
-      if ((window as any).Hands && window.Camera) {
-        clearInterval(interval);
-
-        hands = new (window as any).Hands({
-          locateFile: (file: string) =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-        });
-
-        hands.setOptions({
-          maxNumHands: 1,
-          modelComplexity: 0, // LEBIH RINGAN
-          minDetectionConfidence: 0.8,
-          minTrackingConfidence: 0.8,
-        });
-
-        hands.onResults((results: any) => {
-          if (!isActiveRef.current) return;
-
-          setIsModelReady(true);
-
-          if (
-            results.multiHandLandmarks &&
-            results.multiHandLandmarks.length > 0 &&
-            gameStarted &&
-            !roundPlayedRef.current
-          ) {
-            const landmarks = results.multiHandLandmarks[0];
-            const gestureName = classifyGesture(landmarks);
-
-            if (gestureName) {
-              setGesture(gestureName);
-              playRound(gestureName);
-              roundPlayedRef.current = true;
-              setGameStarted(false);
-              setIsDetecting(false);
-              setShowResultModal(true);
-            }
-          }
-        });
-
-        camera = new window.Camera(video, {
-          onFrame: async () => {
-            await hands.send({ image: video });
-          },
-          width: 480,
-          height: 360,
-        });
-
-        camera.start();
+    const checkReady = setInterval(() => {
+      if ((window as any).Hands && window.Camera && webcamRef.current?.video) {
+        clearInterval(checkReady);
+        setupModel();
       }
     }, 100);
 
     return () => {
-      isActiveRef.current = false;
-      clearInterval(interval);
-      if (camera) camera.stop();
+      clearInterval(checkReady);
+      cameraRef.current?.stop();
     };
-  }, [gameStarted]);
+  }, [setupModel]);
 
-  useEffect(() => {
-    if (isDetecting) {
-      const fallback = setTimeout(() => {
-        if (!roundPlayedRef.current) {
-          setGesture("");
-          setResult("Tidak dapat mendeteksi gestur. Coba lagi!");
-          setShowResultModal(true);
-          setIsDetecting(false);
-          setGameStarted(false);
+  const startGame = () => {
+    setGesture("");
+    setResult("");
+    setShowResultModal(false);
+    setCountdown(3);
+    roundPlayedRef.current = false;
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === 1) {
+          clearInterval(timer);
+          gameStartedRef.current = true;
+          setIsDetecting(true);
+
+          setTimeout(() => {
+            if (!roundPlayedRef.current) {
+              setResult("Tidak dapat mendeteksi gestur. Coba lagi!");
+              setShowResultModal(true);
+              setIsDetecting(false);
+              gameStartedRef.current = false;
+            }
+          }, 3000);
+
+          return null;
         }
-      }, 3000); // Timeout fallback 3 detik
-
-      return () => clearTimeout(fallback);
-    }
-  }, [isDetecting]);
+        return (prev ?? 1) - 1;
+      });
+    }, 1000);
+  };
 
   const playRound = (playerMove: string) => {
     const moves = ["rock", "paper", "scissors"];
@@ -163,26 +176,6 @@ export default function GamePage() {
     return "";
   };
 
-  const startGame = () => {
-    setCountdown(3);
-    setGesture("");
-    setResult("");
-    setShowResultModal(false);
-    roundPlayedRef.current = false;
-
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev === 1) {
-          clearInterval(interval);
-          setGameStarted(true);
-          setIsDetecting(true);
-          return null;
-        }
-        return (prev ?? 1) - 1;
-      });
-    }, 1000);
-  };
-
   return (
     <>
       <Script
@@ -203,7 +196,6 @@ export default function GamePage() {
             width: 480,
             height: 360,
             facingMode: "user",
-            frameRate: { ideal: 30, max: 60 },
           }}
         />
 
@@ -233,7 +225,6 @@ export default function GamePage() {
           </button>
         )}
 
-        {/* Modal hasil match */}
         {showResultModal && (
           <div
             className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
