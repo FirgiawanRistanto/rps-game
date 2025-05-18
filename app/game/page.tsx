@@ -3,6 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
 
+// Untuk menghindari TypeScript error pada window.Hands dan window.Camera
+declare global {
+  interface Window {
+    Hands: any;
+    Camera: any;
+  }
+}
+
 // Global untuk MediaPipe Camera
 declare global {
   interface Window {
@@ -35,12 +43,12 @@ export default function GamePage() {
   useEffect(() => {
   isActiveRef.current = true;
 
-  const waitForCamera = async () => {
+  const init = async () => {
     if (!webcamRef.current || typeof window === "undefined") return;
     const video = webcamRef.current.video;
 
-    // Tunggu sampai video dari webcam siap
-    const waitUntilReady = () =>
+    // Tunggu sampai video webcam siap
+    const waitUntilVideoReady = () =>
       new Promise<void>((resolve) => {
         const check = () => {
           if (video && video.readyState === 4) {
@@ -52,74 +60,73 @@ export default function GamePage() {
         check();
       });
 
-    await waitUntilReady();
+    await waitUntilVideoReady();
 
-    const interval = setInterval(() => {
-      if ((window as any).Hands && window.Camera) {
-        clearInterval(interval);
-
-        const hands = new (window as any).Hands({
-          locateFile: (file: string) =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-        });
-
-        hands.setOptions({
-          maxNumHands: 1,
-          modelComplexity: 0,
-          minDetectionConfidence: 0.75,
-          minTrackingConfidence: 0.75,
-        });
-
-        hands.onResults((results: any) => {
-          setIsModelReady(true);
-
-          if (
-            results.multiHandLandmarks &&
-            results.multiHandLandmarks.length > 0 &&
-            isActiveRef.current &&
-            gameStarted &&
-            !roundPlayedRef.current
-          ) {
-            const landmarks = results.multiHandLandmarks[0];
-            const gestureName = classifyGesture(landmarks);
-
-            if (gestureName) {
-              sfxRef.current.detect?.play();
-              setGesture(gestureName);
-              playRound(gestureName);
-              roundPlayedRef.current = true;
-              setGameStarted(false);
-              setShowDetectingModal(false);
-              setShowResultModal(true);
-            }
-          }
-        });
-
-        const processFrame = async () => {
-          if (video && isActiveRef.current) {
-            await hands.send({ image: video });
-            requestAnimationFrame(processFrame);
-          }
+    const handsReady = () =>
+      new Promise<void>((resolve) => {
+        const check = () => {
+          if (window.Hands && window.Camera) resolve();
+          else setTimeout(check, 50);
         };
+        check();
+      });
 
-        const camera = new window.Camera(video, {
-          onFrame: () => {},
-          width: 640,
-          height: 480,
-        });
+    await handsReady();
 
-        camera.start();
+    const hands = new window.Hands({
+      locateFile: (file: string) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 0,
+      minDetectionConfidence: 0.75,
+      minTrackingConfidence: 0.75,
+    });
+
+    hands.onResults((results: any) => {
+      setIsModelReady(true);
+
+      if (
+        results.multiHandLandmarks &&
+        results.multiHandLandmarks.length > 0 &&
+        isActiveRef.current &&
+        gameStarted &&
+        !roundPlayedRef.current
+      ) {
+        const landmarks = results.multiHandLandmarks[0];
+        const gestureName = classifyGesture(landmarks);
+
+        if (gestureName) {
+          sfxRef.current.detect?.play();
+          setGesture(gestureName);
+          playRound(gestureName);
+          roundPlayedRef.current = true;
+          setGameStarted(false);
+          setShowDetectingModal(false);
+          setShowResultModal(true);
+        }
+      }
+    });
+
+    const processFrame = async () => {
+      if (video && isActiveRef.current) {
+        await hands.send({ image: video });
         requestAnimationFrame(processFrame);
       }
-    }, 100);
+    };
+
+    requestAnimationFrame(processFrame); // Mulai proses deteksi per frame
   };
 
-  waitForCamera();
+  init();
 
   return () => {
     isActiveRef.current = false;
   };
-}, []);
+}, [gameStarted]);
+
 
 
   const classifyGesture = (landmarks: any[]): string => {
