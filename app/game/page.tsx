@@ -252,28 +252,6 @@ export default function GamePage() {
           </div>
         )}
       </div>
-
-      {/* Tambah CSS animasi */}
-      <style jsx global>{`
-        @keyframes shake {
-          0% { transform: translate(1px, 1px) rotate(0deg); }
-          25% { transform: translate(-1px, -2px) rotate(-1deg); }
-          50% { transform: translate(-3px, 0px) rotate(1deg); }
-          75% { transform: translate(3px, 2px) rotate(0deg); }
-          100% { transform: translate(1px, -1px) rotate(-1deg); }
-        }
-        .animate-shake {
-          animation: shake 0.4s infinite;
-        }
-        @keyframes glitch {
-          0% { text-shadow: 2px 0 red, -2px 0 cyan; }
-          50% { text-shadow: -2px 0 red, 2px 0 cyan; }
-          100% { text-shadow: 2px 0 red, -2px 0 cyan; }
-        }
-        .animate-glitch {
-          animation: glitch 0.2s infinite;
-        }
-      `}</style>
     </>
   );
 }
