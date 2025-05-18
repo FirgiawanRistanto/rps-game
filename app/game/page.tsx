@@ -1,72 +1,158 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
-import { Hands } from "@mediapipe/hands";
-import { Camera } from "@mediapipe/camera_utils";
-import * as tf from "@tensorflow/tfjs";
-import { db } from "@/lib/firebase";
-import { addDoc, collection } from "firebase/firestore";
-import { classifyGesture } from "@/lib/gestures/gestureClassifier";
+import Webcam from "react-webcam";
+import Script from "next/script";
+
+declare global {
+  interface Window {
+    Hands: any;
+  }
+}
 
 export default function GamePage() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const handsRef = useRef<Hands | null>(null);
-  const rafIdRef = useRef<number | null>(null);
+  const webcamRef = useRef<Webcam>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const handsRef = useRef<any>(null);
+  const roundPlayedRef = useRef(false);
 
   const [gesture, setGesture] = useState("");
-  const [aiGesture, setAiGesture] = useState("");
+  const [score, setScore] = useState({ player: 0, ai: 0 });
   const [result, setResult] = useState("");
-  const [score, setScore] = useState(0);
-  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isModelReady, setIsModelReady] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
-  const [statusText, setStatusText] = useState("Klik mulai untuk bermain");
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [statusText, setStatusText] = useState("Loading model...");
 
-  const roundPlayedRef = useRef(false);
-  const sfx = useRef<{ [key: string]: HTMLAudioElement }>({});
+  const sfx = useRef({
+    countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : undefined,
+    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : undefined,
+    win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : undefined,
+    lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : undefined,
+    draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : undefined,
+  });
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!webcamRef.current || typeof window === "undefined") return;
 
-    sfx.current = {
-      win: new Audio("/sfx/win.mp3"),
-      lose: new Audio("/sfx/lose.mp3"),
-      draw: new Audio("/sfx/draw.mp3"),
-      countdown: new Audio("/sfx/countdown.mp3"),
-      start: new Audio("/sfx/start.mp3"),
-    };
+    const waitForModel = setInterval(() => {
+      if (window.Hands) {
+        clearInterval(waitForModel);
 
-    handsRef.current = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-    });
+        const hands = new window.Hands({
+          locateFile: (file: string) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+        });
 
-    handsRef.current.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.8,
-      minTrackingConfidence: 0.8,
-    });
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 0,
+          minDetectionConfidence: 0.75,
+          minTrackingConfidence: 0.75,
+        });
 
-    handsRef.current.onResults(onResults);
+        hands.onResults((results: any) => {
+          if (
+            results.multiHandLandmarks &&
+            results.multiHandLandmarks.length > 0 &&
+            gameStarted &&
+            !roundPlayedRef.current
+          ) {
+            const gestureName = classifyGesture(results.multiHandLandmarks[0]);
+            if (gestureName !== "") {
+              sfx.current.detect?.play();
+              setGesture(gestureName);
+              playRound(gestureName);
+              roundPlayedRef.current = true;
+              setGameStarted(false);
+              setStatusText("Match result ready.");
+            }
+          }
+        });
 
-    const camera = new Camera(videoRef.current!, {
-      onFrame: async () => {
-        if (videoRef.current && videoRef.current.readyState === 4) {
-          await handsRef.current?.send({ image: videoRef.current });
-        }
-      },
-      width: 640,
-      height: 480,
-    });
-    camera.start();
+        handsRef.current = hands;
+        videoRef.current = webcamRef.current?.video || null;
+
+        setIsModelReady(true);
+        setStatusText("Model ready.");
+        loopDetection();
+      }
+    }, 100);
 
     return () => {
-      if (rafIdRef.current) {
-        cancelAnimationFrame(rafIdRef.current);
-      }
       handsRef.current = null;
     };
   }, []);
+
+  const loopDetection = () => {
+    const detect = async () => {
+      if (
+        handsRef.current &&
+        videoRef.current &&
+        videoRef.current.readyState === 4 &&
+        gameStarted &&
+        !roundPlayedRef.current
+      ) {
+        await handsRef.current.send({ image: videoRef.current });
+      }
+      requestAnimationFrame(detect);
+    };
+    requestAnimationFrame(detect);
+  };
+
+  const classifyGesture = (landmarks: any[]): string => {
+    const indexTip = landmarks[8];
+    const middleTip = landmarks[12];
+    const ringTip = landmarks[16];
+    const pinkyTip = landmarks[20];
+
+    const isFist =
+      indexTip.y > landmarks[6].y &&
+      middleTip.y > landmarks[10].y &&
+      ringTip.y > landmarks[14].y &&
+      pinkyTip.y > landmarks[18].y;
+
+    const isOpenPalm =
+      indexTip.y < landmarks[6].y &&
+      middleTip.y < landmarks[10].y &&
+      ringTip.y < landmarks[14].y &&
+      pinkyTip.y < landmarks[18].y;
+
+    const isScissors =
+      indexTip.y < landmarks[6].y &&
+      middleTip.y < landmarks[10].y &&
+      ringTip.y > landmarks[14].y &&
+      pinkyTip.y > landmarks[18].y;
+
+    if (isFist) return "rock";
+    if (isOpenPalm) return "paper";
+    if (isScissors) return "scissors";
+    return "";
+  };
+
+  const playRound = (playerMove: string) => {
+    const moves = ["rock", "paper", "scissors"];
+    const aiMove = moves[Math.floor(Math.random() * 3)];
+
+    let outcome = "";
+    if (playerMove === aiMove) {
+      outcome = "Draw";
+      sfx.current.draw?.play();
+    } else if (
+      (playerMove === "rock" && aiMove === "scissors") ||
+      (playerMove === "paper" && aiMove === "rock") ||
+      (playerMove === "scissors" && aiMove === "paper")
+    ) {
+      outcome = "You win!";
+      sfx.current.win?.play();
+      setScore((s) => ({ ...s, player: s.player + 1 }));
+    } else {
+      outcome = "AI wins!";
+      sfx.current.lose?.play();
+      setScore((s) => ({ ...s, ai: s.ai + 1 }));
+    }
+
+    setResult(`${playerMove} vs ${aiMove} → ${outcome}`);
+  };
 
   const startGame = () => {
     setCountdown(3);
@@ -83,7 +169,6 @@ export default function GamePage() {
           setCountdown(null);
           setGameStarted(true);
           setStatusText("Mendeteksi gestur...");
-          startDetectionLoop();
           return null;
         }
         return (prev ?? 1) - 1;
@@ -91,119 +176,54 @@ export default function GamePage() {
     }, 1000);
   };
 
-  const startDetectionLoop = () => {
-    const detect = async () => {
-      if (
-        handsRef.current &&
-        videoRef.current &&
-        videoRef.current.readyState === 4 &&
-        gameStarted &&
-        !roundPlayedRef.current
-      ) {
-        await handsRef.current.send({ image: videoRef.current });
-      }
-
-      rafIdRef.current = requestAnimationFrame(detect);
-    };
-
-    rafIdRef.current = requestAnimationFrame(detect);
-  };
-
-  const onResults = async (results: any) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-
-    if (canvas && ctx && results.image) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    }
-
-    if (
-      results.multiHandLandmarks &&
-      results.multiHandLandmarks.length > 0 &&
-      !roundPlayedRef.current
-    ) {
-      const prediction = await classifyGesture(results.multiHandLandmarks[0]);
-      setGesture(prediction);
-
-      const options = ["rock", "paper", "scissors"];
-      const random = options[Math.floor(Math.random() * 3)];
-      setAiGesture(random);
-
-      let outcome = "";
-      if (prediction === random) {
-        outcome = "draw";
-        sfx.current.draw?.play();
-      } else if (
-        (prediction === "rock" && random === "scissors") ||
-        (prediction === "paper" && random === "rock") ||
-        (prediction === "scissors" && random === "paper")
-      ) {
-        outcome = "win";
-        setScore((prev) => prev + 1);
-        sfx.current.win?.play();
-      } else {
-        outcome = "lose";
-        sfx.current.lose?.play();
-      }
-
-      setResult(outcome);
-      setStatusText(`Kamu ${outcome}!`);
-      setGameStarted(false);
-      roundPlayedRef.current = true;
-
-      if (rafIdRef.current) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
-    }
-  };
-
-  const saveScore = async () => {
-    try {
-      await addDoc(collection(db, "scores"), {
-        name: "Player",
-        score,
-        timestamp: new Date(),
-      });
-      alert("Skor disimpan!");
-    } catch (err) {
-      alert("Gagal menyimpan skor");
-    }
-  };
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-white">
-      <h1 className="text-3xl font-bold mb-4">Suit Gesture Game</h1>
-      <div className="relative w-[640px] h-[480px] border rounded overflow-hidden">
-        <video ref={videoRef} className="absolute w-full h-full" autoPlay playsInline muted />
-        <canvas ref={canvasRef} width={640} height={480} className="absolute" />
-      </div>
+    <>
+      <Script
+        src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
+        strategy="beforeInteractive"
+      />
+      <Script
+        src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"
+        strategy="beforeInteractive"
+      />
 
-      <p className="mt-4 text-lg font-medium">{statusText}</p>
-      {countdown !== null && <p className="text-4xl font-bold my-2">{countdown}</p>}
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+        <Webcam
+          ref={webcamRef}
+          mirrored={false}
+          className="rounded-lg shadow-lg w-full max-w-md"
+        />
 
-      <div className="my-4 flex flex-col gap-2 items-center">
-        <button
-          onClick={startGame}
-          className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Mulai
-        </button>
-        <button
-          onClick={saveScore}
-          className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-        >
-          Simpan Skor
-        </button>
-      </div>
+        <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
+          Detected Gesture: {gesture || "..."}
+        </h2>
 
-      <div className="text-center mt-4">
-        <p>Gesture kamu: <strong>{gesture}</strong></p>
-        <p>Gesture AI: <strong>{aiGesture}</strong></p>
-        <p>Hasil: <strong>{result}</strong></p>
-        <p className="mt-2">Skor: <strong>{score}</strong></p>
+        <p className="mt-2">
+          Score: You {score.player} - AI {score.ai}
+        </p>
+
+        {countdown !== null ? (
+          <p className="text-3xl text-red-500 font-bold mb-2 animate-pulse">
+            Get Ready... {countdown}
+          </p>
+        ) : (
+          <button
+            onClick={startGame}
+            disabled={!isModelReady || gameStarted}
+            className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
+          >
+            {isModelReady ? "Mulai" : "Loading Model..."}
+          </button>
+        )}
+
+        <p className="mt-4 text-sm text-gray-300">{statusText}</p>
+
+        {result && (
+          <p className="mt-6 text-lg text-green-400 font-semibold">
+            {result}
+          </p>
+        )}
       </div>
-    </div>
+    </>
   );
 }
