@@ -1,20 +1,20 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
+import { db } from "../../lib/firebase";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 declare global {
   interface Window {
     Hands: any;
+    Camera: any;
   }
 }
 
 export default function GamePage() {
   const webcamRef = useRef<Webcam>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const handsRef = useRef<any>(null);
-  const roundPlayedRef = useRef(false);
-
   const [gesture, setGesture] = useState("");
   const [score, setScore] = useState({ player: 0, ai: 0 });
   const [result, setResult] = useState("");
@@ -23,67 +23,92 @@ export default function GamePage() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [statusText, setStatusText] = useState("Loading model...");
 
-  const sfx = useRef({
-    countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : undefined,
-    detect: typeof Audio !== "undefined" ? new Audio("/sfx/detect.mp3") : undefined,
-    win: typeof Audio !== "undefined" ? new Audio("/sfx/win.mp3") : undefined,
-    lose: typeof Audio !== "undefined" ? new Audio("/sfx/lose.mp3") : undefined,
-    draw: typeof Audio !== "undefined" ? new Audio("/sfx/draw.mp3") : undefined,
-  });
+  const roundPlayedRef = useRef(false);
+  const handsRef = useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const sfx = useRef<any>({});
 
   useEffect(() => {
-    if (!webcamRef.current || typeof window === "undefined") return;
-
-    const waitForModel = setInterval(() => {
-      if (window.Hands) {
-        clearInterval(waitForModel);
-
-        const hands = new window.Hands({
-          locateFile: (file: string) =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-        });
-
-        hands.setOptions({
-          maxNumHands: 1,
-          modelComplexity: 0,
-          minDetectionConfidence: 0.75,
-          minTrackingConfidence: 0.75,
-        });
-
-        hands.onResults((results: any) => {
-          if (
-            results.multiHandLandmarks &&
-            results.multiHandLandmarks.length > 0 &&
-            gameStarted &&
-            !roundPlayedRef.current
-          ) {
-            const gestureName = classifyGesture(results.multiHandLandmarks[0]);
-            if (gestureName !== "") {
-              sfx.current.detect?.play();
-              setGesture(gestureName);
-              playRound(gestureName);
-              roundPlayedRef.current = true;
-              setGameStarted(false);
-              setStatusText("Match result ready.");
-            }
-          }
-        });
-
-        handsRef.current = hands;
-        videoRef.current = webcamRef.current?.video || null;
-
-        setIsModelReady(true);
-        setStatusText("Model ready.");
-        loopDetection();
-      }
-    }, 100);
-
-    return () => {
-      handsRef.current = null;
-    };
+    // Inisialisasi Audio hanya di client
+    if (typeof window !== "undefined") {
+      sfx.current = {
+        countdown: new Audio("/sfx/countdown.mp3"),
+        detect: new Audio("/sfx/detect.mp3"),
+        win: new Audio("/sfx/win.mp3"),
+        lose: new Audio("/sfx/lose.mp3"),
+        draw: new Audio("/sfx/draw.mp3"),
+        save: new Audio("/sfx/save.mp3"),
+      };
+    }
   }, []);
 
-  const loopDetection = () => {
+  useEffect(() => {
+  const interval = setInterval(() => {
+    if (window.Hands && webcamRef.current) {
+      clearInterval(interval);
+
+      const hands = new window.Hands({
+        locateFile: (file: string) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+      });
+
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 0,
+        minDetectionConfidence: 0.75,
+        minTrackingConfidence: 0.75,
+      });
+
+      hands.onResults((results: any) => {
+        if (
+          results.multiHandLandmarks &&
+          results.multiHandLandmarks.length > 0 &&
+          gameStarted &&
+          !roundPlayedRef.current
+        ) {
+          const gestureName = classifyGesture(results.multiHandLandmarks[0]);
+          if (gestureName) {
+            sfx.current.detect?.play();
+            setGesture(gestureName);
+            playRound(gestureName);
+            roundPlayedRef.current = true;
+            setGameStarted(false);
+            setStatusText("Match result ready.");
+          }
+        }
+      });
+
+      handsRef.current = hands;
+      videoRef.current = webcamRef.current.video;
+      setIsModelReady(true);
+      setStatusText("Model ready.");
+
+      // ✅ Mulai loop deteksi hanya sekali
+      const detect = async () => {
+        if (
+          handsRef.current &&
+          videoRef.current &&
+          videoRef.current.readyState === 4 &&
+          gameStarted &&
+          !roundPlayedRef.current
+        ) {
+          await handsRef.current.send({ image: videoRef.current });
+        }
+        requestAnimationFrame(detect);
+      };
+      requestAnimationFrame(detect);
+    }
+  }, 100);
+
+  return () => {
+    clearInterval(interval);
+    handsRef.current = null;
+  };
+}, []); // ✅ Kosongin dependency array → hanya jalan sekali saat mount
+
+
+  const startDetectionLoop = () => {
     const detect = async () => {
       if (
         handsRef.current &&
@@ -176,6 +201,21 @@ export default function GamePage() {
     }, 1000);
   };
 
+  const handleSaveScore = async () => {
+    try {
+      await addDoc(collection(db, "scores"), {
+        player: score.player,
+        ai: score.ai,
+        createdAt: serverTimestamp(),
+      });
+      sfx.current.save?.play();
+      alert("Skor berhasil disimpan!");
+    } catch (err) {
+      alert("Gagal menyimpan skor.");
+      console.error(err);
+    }
+  };
+
   return (
     <>
       <Script
@@ -186,11 +226,10 @@ export default function GamePage() {
         src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"
         strategy="beforeInteractive"
       />
-
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
         <Webcam
           ref={webcamRef}
-          mirrored={false}
+          mirrored
           className="rounded-lg shadow-lg w-full max-w-md"
         />
 
@@ -219,10 +258,15 @@ export default function GamePage() {
         <p className="mt-4 text-sm text-gray-300">{statusText}</p>
 
         {result && (
-          <p className="mt-6 text-lg text-green-400 font-semibold">
-            {result}
-          </p>
+          <p className="mt-6 text-lg text-green-400 font-semibold">{result}</p>
         )}
+
+        <button
+          onClick={handleSaveScore}
+          className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg"
+        >
+          Simpan Skor ke Firebase
+        </button>
       </div>
     </>
   );
