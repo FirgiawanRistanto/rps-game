@@ -1,29 +1,24 @@
-import type { NormalizedLandmarkList } from "@mediapipe/hands";
+import type { NormalizedLandmarkList } from '@mediapipe/hands';
 
 export const classifyGesture = (landmarks: NormalizedLandmarkList) => {
-  if (!landmarks || landmarks.length !== 21) return "unknown";
+  if (!landmarks || landmarks.length !== 21) return 'unknown';
 
-  const y = (i: number) => landmarks[i].y;
+  const [thumbTip, indexTip, middleTip, ringTip, pinkyTip] = [
+    landmarks[4],
+    landmarks[8],
+    landmarks[12],
+    landmarks[16],
+    landmarks[20],
+  ];
 
-  const indexFolded = y(8) > y(6) + 0.05;
-  const middleFolded = y(12) > y(10) + 0.05;
-  const ringFolded = y(16) > y(14) + 0.05;
-  const pinkyFolded = y(20) > y(18) + 0.05;
+  const indexFolded = indexTip.y > landmarks[6].y;
+  const middleFolded = middleTip.y > landmarks[10].y;
+  const ringFolded = ringTip.y > landmarks[14].y;
+  const pinkyFolded = pinkyTip.y > landmarks[18].y;
 
-  // ✊ Rock
-  if (indexFolded && middleFolded && ringFolded && pinkyFolded) {
-    return "rock";
-  }
+  if (indexFolded && middleFolded && ringFolded && pinkyFolded) return 'rock';
+  if (!indexFolded && !middleFolded && !ringFolded && !pinkyFolded) return 'paper';
+  if (!indexFolded && !middleFolded && ringFolded && pinkyFolded) return 'scissors';
 
-  // ✋ Paper
-  if (!indexFolded && !middleFolded && !ringFolded && !pinkyFolded) {
-    return "paper";
-  }
-
-  // ✌️ Scissors
-  if (!indexFolded && !middleFolded && ringFolded && pinkyFolded) {
-    return "scissors";
-  }
-
-  return "unknown";
+  return 'unknown';
 };
