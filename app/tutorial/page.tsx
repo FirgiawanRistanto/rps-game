@@ -24,7 +24,6 @@ export default function TutorialPage() {
             </ul>
           </li>
           <li>Tunggu hasilnya muncul di layar. Skor otomatis tercatat.</li>
-          <li>Kalau gerak sebelum countdown habis → <span className="text-red-400">💣 Meledak!</span></li>
         </ul>
 
         <p className="text-lg">
