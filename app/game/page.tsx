@@ -120,7 +120,7 @@ export default function GamePage() {
   }, [gameStarted]);
 
   const playRound = (playerMove: string) => {
-    const moves = ["✊", "🖐️", "✌️"];
+    const moves = ["rock", "paper", "scissors"];
     const aiMove = moves[Math.floor(Math.random() * moves.length)];
 
     let outcome = "";
@@ -128,15 +128,15 @@ export default function GamePage() {
       outcome = "Draw";
       sfxRef.current.draw?.play();
     } else if (
-      (playerMove === "✊" && aiMove === "✌️") ||
-      (playerMove === "🖐️" && aiMove === "✊") ||
-      (playerMove === "✌️" && aiMove === "🖐️")
+      (playerMove === "rock" && aiMove === "scissors") ||
+      (playerMove === "paper" && aiMove === "rock") ||
+      (playerMove === "scissors" && aiMove === "paper")
     ) {
       outcome = "You win!";
       sfxRef.current.win?.play();
       setScore((s) => ({ ...s, player: s.player + 1 }));
     } else {
-      outcome = "You Lose!";
+      outcome = "AI wins!";
       sfxRef.current.lose?.play();
       setScore((s) => ({ ...s, ai: s.ai + 1 }));
     }
