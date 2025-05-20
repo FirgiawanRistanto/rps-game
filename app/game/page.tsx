@@ -183,13 +183,19 @@ export default function GamePage() {
           Detected Gesture: {gesture || "..."}
         </h2>
 
+        {gameStarted && (
+          <p className="mt-4 text-blue-400 text-lg font-semibold">
+            Arahkan gesturmu ke kamera 📸✋
+          </p>
+        )}
+
         <p className="mt-2">
           Score: You {score.player} - AI {score.ai}
         </p>
 
         {countdown !== null ? (
           <p className="text-3xl text-red-500 font-bold mb-2 animate-pulse">
-            Get Ready... {countdown}
+            {countdown}
           </p>
         ) : (
           <button
@@ -201,11 +207,6 @@ export default function GamePage() {
           </button>
         )}
 
-        {gameStarted && (
-          <p className="mt-4 text-blue-400 text-lg font-semibold">
-            Arahkan gesturmu ke kamera 📸✋
-          </p>
-        )}
 
         {showResultModal && (
           <div
