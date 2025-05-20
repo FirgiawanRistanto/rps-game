@@ -16,9 +16,9 @@ export const classifyGesture = (landmarks: NormalizedLandmarkList) => {
   const ringFolded = ringTip.y > landmarks[14].y;
   const pinkyFolded = pinkyTip.y > landmarks[18].y;
 
-  if (indexFolded && middleFolded && ringFolded && pinkyFolded) return 'rock';
-  if (!indexFolded && !middleFolded && !ringFolded && !pinkyFolded) return 'paper';
-  if (!indexFolded && !middleFolded && ringFolded && pinkyFolded) return 'scissors';
+  if (indexFolded && middleFolded && ringFolded && pinkyFolded) return '✊';
+  if (!indexFolded && !middleFolded && !ringFolded && !pinkyFolded) return '🖐️';
+  if (!indexFolded && !middleFolded && ringFolded && pinkyFolded) return '✌️';
 
   return 'unknown';
 };

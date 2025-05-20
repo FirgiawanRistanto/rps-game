@@ -5,7 +5,6 @@ import Script from "next/script";
 import { classifyGesture } from "@/lib/gestures/gestureClassifier";
 import { smoothGesture, resetGestureHistory } from "@/lib/gestures/smoothing";
 
-
 declare global {
   interface Window {
     Hands: any;
@@ -29,7 +28,6 @@ export default function GamePage() {
   const [gameStarted, setGameStarted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
-  const [showDetectingModal, setShowDetectingModal] = useState(false);
 
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
@@ -87,7 +85,6 @@ export default function GamePage() {
         ) {
           const landmarks = results.multiHandLandmarks[0];
           const detectedGesture = classifyGesture(landmarks);
-
           const stableGesture = smoothGesture(detectedGesture);
 
           if (stableGesture !== "unknown") {
@@ -95,12 +92,10 @@ export default function GamePage() {
             playRound(stableGesture);
             roundPlayedRef.current = true;
             setGameStarted(false);
-            setShowDetectingModal(false);
             setShowResultModal(true);
           }
         }
       });
-
 
       const processFrame = async () => {
         if (video && isActiveRef.current) {
@@ -120,7 +115,7 @@ export default function GamePage() {
   }, [gameStarted]);
 
   const playRound = (playerMove: string) => {
-    const moves = ["rock", "paper", "scissors"];
+    const moves = ["✊", "🖐️", "✌️"];
     const aiMove = moves[Math.floor(Math.random() * moves.length)];
 
     let outcome = "";
@@ -128,15 +123,15 @@ export default function GamePage() {
       outcome = "Draw";
       sfxRef.current.draw?.play();
     } else if (
-      (playerMove === "rock" && aiMove === "scissors") ||
-      (playerMove === "paper" && aiMove === "rock") ||
-      (playerMove === "scissors" && aiMove === "paper")
+      (playerMove === "✊" && aiMove === "✌️") ||
+      (playerMove === "🖐️" && aiMove === "✊") ||
+      (playerMove === "✌️" && aiMove === "🖐️")
     ) {
-      outcome = "You win!";
+      outcome = "You Win!";
       sfxRef.current.win?.play();
       setScore((s) => ({ ...s, player: s.player + 1 }));
     } else {
-      outcome = "AI wins!";
+      outcome = "You Lose!";
       sfxRef.current.lose?.play();
       setScore((s) => ({ ...s, ai: s.ai + 1 }));
     }
@@ -145,11 +140,10 @@ export default function GamePage() {
   };
 
   const startGame = () => {
-    setCountdown(2);
+    setCountdown(3);
     setGesture("");
     setResult("");
     setShowResultModal(false);
-    setShowDetectingModal(false);
     roundPlayedRef.current = false;
     resetGestureHistory();
 
@@ -160,14 +154,12 @@ export default function GamePage() {
           clearInterval(interval);
           setCountdown(null);
           setGameStarted(true);
-          setShowDetectingModal(true);
           return null;
         }
         return (prev ?? 1) - 1;
       });
     }, 1000);
   };
-
 
   return (
     <>
@@ -209,6 +201,12 @@ export default function GamePage() {
           </button>
         )}
 
+        {gameStarted && (
+          <p className="mt-4 text-blue-400 text-lg font-semibold">
+            Arahkan gesturmu ke kamera 📸✋
+          </p>
+        )}
+
         {showResultModal && (
           <div
             className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
@@ -226,24 +224,6 @@ export default function GamePage() {
               >
                 Close
               </button>
-            </div>
-          </div>
-        )}
-
-        {showDetectingModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
-            <div className="bg-gray-900 p-6 rounded-lg text-center space-y-4 animate-fade-in">
-              <div className="flex justify-center">
-                <div className="w-16 h-16 border-4 border-blue-500 border-dotted rounded-full animate-spin-slow"></div>
-              </div>
-              <h2 className="text-lg font-semibold">Mendeteksi gestur...</h2>
-              <p className="text-sm text-gray-300">Arahkan tanganmu ke kamera</p>
-              <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 transition-all duration-1000 ease-linear"
-                  style={{ width: gameStarted ? "100%" : "0%" }}
-                ></div>
-              </div>
             </div>
           </div>
         )}
