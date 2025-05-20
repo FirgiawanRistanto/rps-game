@@ -28,6 +28,8 @@ export default function GamePage() {
   const [isModelReady, setIsModelReady] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [scoreAnim, setScoreAnim] = useState(false);
+
 
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
@@ -114,6 +116,15 @@ export default function GamePage() {
     };
   }, [gameStarted]);
 
+  useEffect(() => {
+    if (scoreAnim) {
+      const timeout = setTimeout(() => {
+        setScoreAnim(false);
+      }, 400);
+      return () => clearTimeout(timeout);
+    }
+  }, [scoreAnim]);
+
   const playRound = (playerMove: string) => {
     const moves = ["✊", "🖐️", "✌️"];
     const aiMove = moves[Math.floor(Math.random() * moves.length)];
@@ -139,7 +150,7 @@ export default function GamePage() {
       setScore((s) => ({ ...s, ai: s.ai + 1 }));
     }
 
-    setResult(`${playerMove} vs ${aiMove} → ${outcome}`);
+    setResult(`${playerMove} vs ${aiMove}  ${outcome}`);
   };
 
   const startGame = () => {
@@ -206,42 +217,44 @@ export default function GamePage() {
           <Webcam
             ref={webcamRef}
             mirrored
-            className="rounded-lg shadow-lg w-full max-w-md"
+            className="rounded-lg shadow-lg w-full max-w-md game-webcam"
           />
 
           <div className="flex justify-center items-center mt-4">
-            <div
-              className={`gesture-display text-6xl ${
-                gesture === "✊"
-                  ? "text-red-500"
-                  : gesture === "🖐️"
-                  ? "text-green-500"
-                  : gesture === "✌️"
-                  ? "text-blue-500"
-                  : ""
-              }`}
+            <p
+              className={`mt-4 gesture-display text-5xl font-extrabold text-center 
+      ${result.includes("Win")
+                  ? "text-yellow-400 animate-glitch"
+                  : result.includes("Lose")
+                    ? "text-red-500 animate-shake"
+                    : result.includes("Draw")
+                      ? "text-white animate-pulse"
+                      : ""
+                }`}
             >
-              {gesture}
-            </div>
+              {result}
+            </p>
           </div>
-          <p className="mt-2">
+
+          <p className={`arcade-score ${scoreAnim ? "bounce" : ""}`}>
             Score: You {score.player} - AI {score.ai}
           </p>
 
           {countdown !== null ? (
-            <p className="text-3xl text-red-500 font-bold mb-2 animate-pulse">
+            <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"> 
+              <p className="text-8xl font-extrabold text-yellow-400 arcade-glow animate-countdown">
               {countdown}
             </p>
+            </div>
           ) : (
             <button
               onClick={startGame}
-              disabled={!isModelReady || countdown !== null || gameStarted}
-              className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
+              className="arcade-button mt-6 disabled:opacity-50"
             >
-              {isModelReady ? "Start Game" : "Loading Model..."}
+              {isModelReady ? "Start Game" : "Loading..."}
             </button>
+
           )}
-          <p className="mt-4 gesture-display text-5xl">{result}</p>
         </div>
       </div>
     </>
