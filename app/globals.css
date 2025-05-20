@@ -288,3 +288,9 @@ body {
 .glow-logo {
   box-shadow: 0 0 20px #facc15, 0 0 40px #facc15, 0 0 60px #facc15;
 }
+
+/* Hide Next.js error overlay indicator */
+#__next-build-watcher,
+.nextjs-dev-overlay {
+  display: none !important;
+}

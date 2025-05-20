@@ -29,7 +29,7 @@ export default function GamePage() {
   const [gameStarted, setGameStarted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [scoreAnim, setScoreAnim] = useState(false);
-
+  const isDetectingRef = useRef(false);
 
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
@@ -65,7 +65,7 @@ export default function GamePage() {
 
       const hands = new window.Hands({
         locateFile: (file: string) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
       });
 
       hands.setOptions({
@@ -83,25 +83,39 @@ export default function GamePage() {
           results.multiHandLandmarks.length > 0 &&
           isActiveRef.current &&
           gameStarted &&
+          isDetectingRef.current &&
           !roundPlayedRef.current
         ) {
           const landmarks = results.multiHandLandmarks[0];
           const detectedGesture = classifyGesture(landmarks);
-
           const stableGesture = smoothGesture(detectedGesture);
 
           if (stableGesture !== "unknown") {
             setGesture(stableGesture);
             playRound(stableGesture);
             roundPlayedRef.current = true;
+            isDetectingRef.current = false; // stop detection sampe game mulai lagi
             setGameStarted(false);
           }
         }
       });
 
+
       const processFrame = async () => {
-        if (video && isActiveRef.current) {
-          await hands.send({ image: video });
+        if (
+          isActiveRef.current &&
+          video &&
+          video.readyState === 4 &&
+          video.videoWidth > 0 &&
+          video.videoHeight > 0
+        ) {
+          try {
+            await hands.send({ image: video });
+          } catch (err) {
+            console.error("Error sending frame:", err);
+          }
+        }
+        if (isActiveRef.current) {
           requestAnimationFrame(processFrame);
         }
       };
@@ -111,8 +125,23 @@ export default function GamePage() {
 
     init();
 
+    // handle tab switch
+    const onVisibilityChange = () => {
+      isActiveRef.current = !document.hidden;
+      if (!document.hidden) {
+        requestAnimationFrame(() => {
+          if (webcamRef.current?.video?.readyState === 4) {
+            isActiveRef.current = true;
+          }
+        });
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
       isActiveRef.current = false;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [gameStarted]);
 
@@ -159,6 +188,7 @@ export default function GamePage() {
     setResult("");
     roundPlayedRef.current = false;
     resetGestureHistory();
+    isDetectingRef.current = false; // pastikan detection off dulu
 
     const interval = setInterval(() => {
       sfxRef.current.countdown?.play();
@@ -167,6 +197,7 @@ export default function GamePage() {
           clearInterval(interval);
           setCountdown(null);
           setGameStarted(true);
+          isDetectingRef.current = true; // aktifkan detection pas countdown habis
           return null;
         }
         return (prev ?? 1) - 1;
@@ -174,7 +205,7 @@ export default function GamePage() {
     }, 1000);
   };
 
-  // ✨ Confetti efek
+
   const triggerConfetti = () => {
     confetti({
       particleCount: 150,
@@ -183,7 +214,6 @@ export default function GamePage() {
     });
   };
 
-  // 💥 Glitch efek
   const triggerGlitch = () => {
     document.body.classList.add("glitch");
     setTimeout(() => {
@@ -191,7 +221,6 @@ export default function GamePage() {
     }, 500);
   };
 
-  // 🌟 Sparkle efek
   const triggerSparkle = () => {
     confetti({
       particleCount: 50,
@@ -223,7 +252,7 @@ export default function GamePage() {
           <div className="flex justify-center items-center mt-4">
             <p
               className={`mt-4 gesture-display text-5xl font-extrabold text-center 
-      ${result.includes("Win")
+                ${result.includes("Win")
                   ? "text-yellow-400 animate-glitch"
                   : result.includes("Lose")
                     ? "text-red-500 animate-shake"
@@ -241,10 +270,10 @@ export default function GamePage() {
           </p>
 
           {countdown !== null ? (
-            <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"> 
+            <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
               <p className="text-8xl font-extrabold text-yellow-400 arcade-glow animate-countdown">
-              {countdown}
-            </p>
+                {countdown}
+              </p>
             </div>
           ) : (
             <button
@@ -253,7 +282,6 @@ export default function GamePage() {
             >
               {isModelReady ? "Start Game" : "Loading..."}
             </button>
-
           )}
         </div>
       </div>
