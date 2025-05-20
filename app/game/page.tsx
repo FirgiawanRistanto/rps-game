@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
+import confetti from "canvas-confetti";
 import { classifyGesture } from "@/lib/gestures/gestureClassifier";
 import { smoothGesture, resetGestureHistory } from "@/lib/gestures/smoothing";
 
@@ -27,7 +28,6 @@ export default function GamePage() {
   const [isModelReady, setIsModelReady] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [showResultModal, setShowResultModal] = useState(false);
 
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
@@ -85,6 +85,7 @@ export default function GamePage() {
         ) {
           const landmarks = results.multiHandLandmarks[0];
           const detectedGesture = classifyGesture(landmarks);
+
           const stableGesture = smoothGesture(detectedGesture);
 
           if (stableGesture !== "unknown") {
@@ -92,7 +93,6 @@ export default function GamePage() {
             playRound(stableGesture);
             roundPlayedRef.current = true;
             setGameStarted(false);
-            setShowResultModal(true);
           }
         }
       });
@@ -122,6 +122,7 @@ export default function GamePage() {
     if (playerMove === aiMove) {
       outcome = "Draw";
       sfxRef.current.draw?.play();
+      triggerSparkle();
     } else if (
       (playerMove === "✊" && aiMove === "✌️") ||
       (playerMove === "🖐️" && aiMove === "✊") ||
@@ -129,10 +130,12 @@ export default function GamePage() {
     ) {
       outcome = "You Win!";
       sfxRef.current.win?.play();
+      triggerConfetti();
       setScore((s) => ({ ...s, player: s.player + 1 }));
     } else {
       outcome = "You Lose!";
       sfxRef.current.lose?.play();
+      triggerGlitch();
       setScore((s) => ({ ...s, ai: s.ai + 1 }));
     }
 
@@ -143,7 +146,6 @@ export default function GamePage() {
     setCountdown(3);
     setGesture("");
     setResult("");
-    setShowResultModal(false);
     roundPlayedRef.current = false;
     resetGestureHistory();
 
@@ -161,6 +163,33 @@ export default function GamePage() {
     }, 1000);
   };
 
+  // ✨ Confetti efek
+  const triggerConfetti = () => {
+    confetti({
+      particleCount: 150,
+      spread: 80,
+      origin: { y: 0.6 },
+    });
+  };
+
+  // 💥 Glitch efek
+  const triggerGlitch = () => {
+    document.body.classList.add("glitch");
+    setTimeout(() => {
+      document.body.classList.remove("glitch");
+    }, 500);
+  };
+
+  // 🌟 Sparkle efek
+  const triggerSparkle = () => {
+    confetti({
+      particleCount: 50,
+      spread: 50,
+      origin: { y: 0.5 },
+      colors: ["#ffffff", "#ffd700"],
+    });
+  };
+
   return (
     <>
       <Script
@@ -172,62 +201,48 @@ export default function GamePage() {
         strategy="beforeInteractive"
       />
 
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-        <Webcam
-          ref={webcamRef}
-          mirrored
-          className="rounded-lg shadow-lg w-full max-w-md"
-        />
+      <div className="arcade-bg flex flex-col items-center justify-center min-h-screen p-4 text-white">
+        <div className="arcade-content">
+          <Webcam
+            ref={webcamRef}
+            mirrored
+            className="rounded-lg shadow-lg w-full max-w-md"
+          />
 
-        <h2 className="mt-4 text-yellow-400 text-2xl font-bold">
-          Detected Gesture: {gesture || "..."}
-        </h2>
-
-        {gameStarted && (
-          <p className="mt-4 text-blue-400 text-lg font-semibold">
-            Arahkan gesturmu ke kamera 📸✋
-          </p>
-        )}
-
-        <p className="mt-2">
-          Score: You {score.player} - AI {score.ai}
-        </p>
-
-        {countdown !== null ? (
-          <p className="text-3xl text-red-500 font-bold mb-2 animate-pulse">
-            {countdown}
-          </p>
-        ) : (
-          <button
-            onClick={startGame}
-            disabled={!isModelReady || countdown !== null || gameStarted}
-            className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
-          >
-            {isModelReady ? "Start Game" : "Loading Model..."}
-          </button>
-        )}
-
-
-        {showResultModal && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
-            onClick={() => setShowResultModal(false)}
-          >
+          <div className="flex justify-center items-center mt-4">
             <div
-              className="bg-gray-800 p-6 rounded-lg max-w-sm w-full text-center"
-              onClick={(e) => e.stopPropagation()}
+              className={`gesture-display text-6xl ${
+                gesture === "✊"
+                  ? "text-red-500"
+                  : gesture === "🖐️"
+                  ? "text-green-500"
+                  : gesture === "✌️"
+                  ? "text-blue-500"
+                  : ""
+              }`}
             >
-              <h3 className="text-xl font-bold mb-4">Round Result</h3>
-              <p className="mb-6 text-lg">{result}</p>
-              <button
-                onClick={() => setShowResultModal(false)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
-              >
-                Close
-              </button>
+              {gesture}
             </div>
           </div>
-        )}
+          <p className="mt-2">
+            Score: You {score.player} - AI {score.ai}
+          </p>
+
+          {countdown !== null ? (
+            <p className="text-3xl text-red-500 font-bold mb-2 animate-pulse">
+              {countdown}
+            </p>
+          ) : (
+            <button
+              onClick={startGame}
+              disabled={!isModelReady || countdown !== null || gameStarted}
+              className="px-6 py-2 mt-4 bg-blue-500 hover:bg-blue-700 rounded-lg transition disabled:bg-gray-600"
+            >
+              {isModelReady ? "Start Game" : "Loading Model..."}
+            </button>
+          )}
+          <p className="mt-4 gesture-display text-5xl">{result}</p>
+        </div>
       </div>
     </>
   );
