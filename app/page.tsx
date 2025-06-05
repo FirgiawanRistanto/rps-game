@@ -21,12 +21,12 @@ export default function Home() {
           Start Game
         </Link>
 
-        <a
+        <Link
           href="/tutorial"
           className="px-8 py-4 bg-gradient-to-b from-pink-600 to-purple-800 text-yellow-200 rounded-full font-extrabold text-lg border-4 border-pink-400 hover:scale-110 hover:brightness-110 transition duration-300 shadow-lg arcade-glow"
         >
           Tutorial
-        </a>
+        </Link>
       </div>
     </main>
   );
