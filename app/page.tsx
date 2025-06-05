@@ -14,12 +14,12 @@ export default function Home() {
       </p>
 
       <div className="flex gap-6 animate-bounce-in">
-        <a
+        <Link
           href="/game"
           className="px-8 py-4 bg-gradient-to-b from-yellow-400 to-red-500 text-indigo-900 rounded-full font-extrabold text-lg border-4 border-yellow-300 hover:scale-110 hover:brightness-110 transition duration-300 shadow-lg arcade-glow"
         >
           Start Game
-        </a>
+        </Link>
 
         <a
           href="/tutorial"
