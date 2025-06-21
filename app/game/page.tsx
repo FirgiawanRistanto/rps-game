@@ -1,4 +1,6 @@
+// components/GamePageContent.tsx
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import Script from "next/script";
@@ -13,7 +15,7 @@ declare global {
   }
 }
 
-export default function GamePage() {
+export default function GamePageContent() {
   const webcamRef = useRef<Webcam>(null);
   const sfxRef = useRef({
     countdown: typeof Audio !== "undefined" ? new Audio("/sfx/countdown.mp3") : null,
@@ -29,8 +31,8 @@ export default function GamePage() {
   const [gameStarted, setGameStarted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [scoreAnim, setScoreAnim] = useState(false);
-  const isDetectingRef = useRef(false);
 
+  const isDetectingRef = useRef(false);
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
 
@@ -76,8 +78,6 @@ export default function GamePage() {
       });
 
       hands.onResults((results: any) => {
-        setIsModelReady(true);
-
         if (
           results.multiHandLandmarks &&
           results.multiHandLandmarks.length > 0 &&
@@ -94,12 +94,13 @@ export default function GamePage() {
             setGesture(stableGesture);
             playRound(stableGesture);
             roundPlayedRef.current = true;
-            isDetectingRef.current = false; // stop detection sampe game mulai lagi
+            isDetectingRef.current = false;
             setGameStarted(false);
           }
         }
       });
 
+      setIsModelReady(true);
 
       const processFrame = async () => {
         if (
@@ -125,7 +126,6 @@ export default function GamePage() {
 
     init();
 
-    // handle tab switch
     const onVisibilityChange = () => {
       isActiveRef.current = !document.hidden;
       if (!document.hidden) {
@@ -188,7 +188,7 @@ export default function GamePage() {
     setResult("");
     roundPlayedRef.current = false;
     resetGestureHistory();
-    isDetectingRef.current = false; // pastikan detection off dulu
+    isDetectingRef.current = false;
 
     const interval = setInterval(() => {
       sfxRef.current.countdown?.play();
@@ -197,7 +197,7 @@ export default function GamePage() {
           clearInterval(interval);
           setCountdown(null);
           setGameStarted(true);
-          isDetectingRef.current = true; // aktifkan detection pas countdown habis
+          isDetectingRef.current = true;
           return null;
         }
         return (prev ?? 1) - 1;
@@ -205,13 +205,8 @@ export default function GamePage() {
     }, 1000);
   };
 
-
   const triggerConfetti = () => {
-    confetti({
-      particleCount: 150,
-      spread: 80,
-      origin: { y: 0.6 },
-    });
+    confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
   };
 
   const triggerGlitch = () => {
@@ -232,14 +227,8 @@ export default function GamePage() {
 
   return (
     <>
-      <Script
-        src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"
-        strategy="beforeInteractive"
-      />
-      <Script
-        src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"
-        strategy="beforeInteractive"
-      />
+      <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js" strategy="beforeInteractive" />
+      <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js" strategy="beforeInteractive" />
 
       <div className="arcade-bg flex flex-col items-center justify-center min-h-screen p-4 text-white">
         <div className="arcade-content">
