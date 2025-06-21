@@ -37,6 +37,39 @@ export default function GamePageContent() {
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
 
+  const handleUploadScore = async () => {
+    const playerName = prompt("Masukkan nama kamu untuk leaderboard:");
+
+    if (!playerName) {
+      alert("Nama gak boleh kosong bro!");
+      return;
+    }
+
+    const res = await fetch("/api/leaderboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: playerName,
+        win: score.player,
+        lose: score.ai,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+      alert("Upload gagal: " + data.error);
+    } else {
+      alert("Skor berhasil diupload bro! 🔥");
+
+      // Reset setelah upload
+      setScore({ player: 0, ai: 0 });
+      setResult("");
+    }
+  };
+
+
+
   useEffect(() => {
     isActiveRef.current = true;
 
@@ -231,6 +264,16 @@ export default function GamePageContent() {
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js" strategy="beforeInteractive" />
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js" strategy="beforeInteractive" />
 
+      <div className="absolute top-4 right-4 z-20">
+        <Link href="/leaderboard">
+          <img
+            src="/leaderboard.png"
+            alt="Leaderboard"
+            className="w-10 h-10 hover:scale-110 transition duration-200"
+          />
+        </Link>
+      </div>
+
       <div className="arcade-bg flex flex-col items-center justify-center min-h-screen p-4 text-white relative">
         {/* Tombol Main Menu */}
         <div className="absolute top-4 left-4 z-50">
@@ -277,11 +320,19 @@ export default function GamePageContent() {
           ) : (
             <button
               onClick={startGame}
-              className="arcade-button mt-6 disabled:opacity-50"
+              className="arcade-button mt-6 disabled:opacity-50 text-lg md:text-2xl"
             >
               {isModelReady ? "Start Game" : "Loading..."}
             </button>
           )}
+
+          <button
+            onClick={handleUploadScore}
+            className="arcade-button mt-4 bg-green-600 hover:bg-green-700 transition"
+          >
+            Upload Score
+          </button>
+
         </div>
       </div>
     </>
