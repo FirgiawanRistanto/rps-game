@@ -71,113 +71,96 @@ export default function GamePageContent() {
 
 
   useEffect(() => {
-    isActiveRef.current = true;
+  isActiveRef.current = true;
+  let timeout: any;
 
-    const init = async () => {
-      if (!webcamRef.current || typeof window === "undefined") return;
-      const video = webcamRef.current.video;
+  const init = async () => {
+    if (!webcamRef.current || typeof window === "undefined") return;
+    const video = webcamRef.current.video;
 
-      const waitUntilVideoReady = () =>
-        new Promise<void>((resolve) => {
-          const check = () => {
-            if (video && video.readyState === 4) resolve();
-            else requestAnimationFrame(check);
-          };
-          check();
-        });
-
-      await waitUntilVideoReady();
-
-      const handsReady = () =>
-        new Promise<void>((resolve) => {
-          const check = () => {
-            if (window.Hands && window.Camera) resolve();
-            else setTimeout(check, 50);
-          };
-          check();
-        });
-
-      await handsReady();
-
-      const hands = new window.Hands({
-        locateFile: (file: string) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    const waitUntilVideoReady = () =>
+      new Promise<void>((resolve) => {
+        const check = () => {
+          if (video && video.readyState === 4) resolve();
+          else requestAnimationFrame(check);
+        };
+        check();
       });
 
-      hands.setOptions({
-        maxNumHands: 1,
-        modelComplexity: 0,
-        minDetectionConfidence: 0.7,
-        minTrackingConfidence: 0.7,
+    await waitUntilVideoReady();
+
+    const handsReady = () =>
+      new Promise<void>((resolve) => {
+        const check = () => {
+          if (window.Hands && window.Camera) resolve();
+          else setTimeout(check, 50);
+        };
+        check();
       });
 
-      hands.onResults((results: any) => {
-        if (
-          results.multiHandLandmarks &&
-          results.multiHandLandmarks.length > 0 &&
-          isActiveRef.current &&
-          gameStarted &&
-          isDetectingRef.current &&
-          !roundPlayedRef.current
-        ) {
-          const landmarks = results.multiHandLandmarks[0];
-          const detectedGesture = classifyGesture(landmarks);
-          const stableGesture = smoothGesture(detectedGesture);
+    await handsReady();
 
-          if (stableGesture !== "unknown") {
-            setGesture(stableGesture);
-            playRound(stableGesture);
-            roundPlayedRef.current = true;
-            isDetectingRef.current = false;
-            setGameStarted(false);
-          }
-        }
-      });
+    clearTimeout(timeout); // kalau udah ready, matikan timeout-nya
 
+    const hands = new window.Hands({
+      locateFile: (file: string) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 0,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7,
+    });
+
+    hands.onResults((results: any) => {
       setIsModelReady(true);
 
-      const processFrame = async () => {
-        if (
-          isActiveRef.current &&
-          video &&
-          video.readyState === 4 &&
-          video.videoWidth > 0 &&
-          video.videoHeight > 0
-        ) {
-          try {
-            await hands.send({ image: video });
-          } catch (err) {
-            console.error("Error sending frame:", err);
-          }
+      if (
+        results.multiHandLandmarks &&
+        results.multiHandLandmarks.length > 0 &&
+        isActiveRef.current &&
+        gameStarted &&
+        !roundPlayedRef.current
+      ) {
+        const landmarks = results.multiHandLandmarks[0];
+        const detectedGesture = classifyGesture(landmarks);
+        const stableGesture = smoothGesture(detectedGesture);
+
+        if (stableGesture !== "unknown") {
+          setGesture(stableGesture);
+          playRound(stableGesture);
+          roundPlayedRef.current = true;
+          setGameStarted(false);
         }
-        if (isActiveRef.current) {
-          requestAnimationFrame(processFrame);
-        }
-      };
+      }
+    });
 
-      requestAnimationFrame(processFrame);
-    };
-
-    init();
-
-    const onVisibilityChange = () => {
-      isActiveRef.current = !document.hidden;
-      if (!document.hidden) {
-        requestAnimationFrame(() => {
-          if (webcamRef.current?.video?.readyState === 4) {
-            isActiveRef.current = true;
-          }
-        });
+    const processFrame = async () => {
+      if (video && isActiveRef.current) {
+        await hands.send({ image: video });
+        requestAnimationFrame(processFrame);
       }
     };
 
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    requestAnimationFrame(processFrame);
+  };
 
-    return () => {
-      isActiveRef.current = false;
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [gameStarted]);
+  init();
+
+  // 🚨 Timeout 5 detik kalau model gak ready, reload halaman
+  timeout = setTimeout(() => {
+    console.warn("Model belum ready, reload page...");
+    window.location.reload();
+  }, 3000);
+
+  return () => {
+    isActiveRef.current = false;
+    clearTimeout(timeout);
+  };
+}, [gameStarted]);
+
 
   useEffect(() => {
     if (scoreAnim) {
