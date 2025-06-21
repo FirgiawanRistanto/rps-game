@@ -32,13 +32,13 @@
     "@types/canvas-confetti": "^1.9.0",
     "@types/fingerpose": "^0.1.1",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.7",
-    "typescript": "^5"
+    "typescript": "^5.8.3"
   }
 }
