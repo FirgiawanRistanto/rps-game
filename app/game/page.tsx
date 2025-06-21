@@ -293,7 +293,7 @@ export default function GamePageContent() {
 
           <div className="flex justify-center items-center mt-4">
             <p
-              className={`mt-4 gesture-display text-5xl font-extrabold text-center 
+              className={`mt-4 gesture-display font-extrabold text-center text-lg md:text-2xl 
                 ${result.includes("Win")
                   ? "text-yellow-400 animate-glitch"
                   : result.includes("Lose")
