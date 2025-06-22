@@ -153,7 +153,7 @@ export default function GamePageContent() {
     timeout = setTimeout(() => {
       console.warn("Model belum ready, reload page...");
       window.location.reload();
-    }, 5000);
+    }, 500);
 
     return () => {
       isActiveRef.current = false;
