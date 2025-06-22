@@ -72,6 +72,7 @@ export default function GamePageContent() {
 
   useEffect(() => {
     isActiveRef.current = true;
+    let timeout: any;
 
     const init = async () => {
       if (!webcamRef.current || typeof window === "undefined") return;
@@ -99,9 +100,11 @@ export default function GamePageContent() {
 
       await handsReady();
 
+      clearTimeout(timeout); // kalau udah ready, matikan timeout-nya
+
       const hands = new window.Hands({
         locateFile: (file: string) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
       });
 
       hands.setOptions({
@@ -112,12 +115,13 @@ export default function GamePageContent() {
       });
 
       hands.onResults((results: any) => {
+        setIsModelReady(true);
+
         if (
           results.multiHandLandmarks &&
           results.multiHandLandmarks.length > 0 &&
           isActiveRef.current &&
           gameStarted &&
-          isDetectingRef.current &&
           !roundPlayedRef.current
         ) {
           const landmarks = results.multiHandLandmarks[0];
@@ -128,29 +132,14 @@ export default function GamePageContent() {
             setGesture(stableGesture);
             playRound(stableGesture);
             roundPlayedRef.current = true;
-            isDetectingRef.current = false;
             setGameStarted(false);
           }
         }
       });
 
-      setIsModelReady(true);
-
       const processFrame = async () => {
-        if (
-          isActiveRef.current &&
-          video &&
-          video.readyState === 4 &&
-          video.videoWidth > 0 &&
-          video.videoHeight > 0
-        ) {
-          try {
-            await hands.send({ image: video });
-          } catch (err) {
-            console.error("Error sending frame:", err);
-          }
-        }
-        if (isActiveRef.current) {
+        if (video && isActiveRef.current) {
+          await hands.send({ image: video });
           requestAnimationFrame(processFrame);
         }
       };
@@ -160,24 +149,18 @@ export default function GamePageContent() {
 
     init();
 
-    const onVisibilityChange = () => {
-      isActiveRef.current = !document.hidden;
-      if (!document.hidden) {
-        requestAnimationFrame(() => {
-          if (webcamRef.current?.video?.readyState === 4) {
-            isActiveRef.current = true;
-          }
-        });
-      }
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    // 🚨 Timeout 5 detik kalau model gak ready, reload halaman
+    timeout = setTimeout(() => {
+      console.warn("Model belum ready, reload page...");
+      window.location.reload();
+    }, 5000);
 
     return () => {
       isActiveRef.current = false;
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      clearTimeout(timeout);
     };
   }, [gameStarted]);
+
 
   useEffect(() => {
     if (scoreAnim) {
