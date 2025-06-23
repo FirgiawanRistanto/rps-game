@@ -161,7 +161,6 @@ body {
   color: #fff200;
   font-size: 32px;
   font-weight: bold;
-  margin-top: 200px;
   padding: 12px 36px;
   border-radius: 20px;
   text-shadow: 2px 2px #7a0f88;
@@ -329,6 +328,14 @@ body {
 
 @media (max-width: 480px) {
   .arcade-button {
+    font-size: 18px;
+    padding: 10px 24px;
+    border-width: 3px;
+  }
+}
+
+@media (max-width: 480px) {
+  .arcade-buttonn {
     font-size: 18px;
     padding: 10px 24px;
     border-width: 3px;
