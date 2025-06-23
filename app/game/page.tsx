@@ -36,6 +36,7 @@ export default function GamePageContent() {
   const isDetectingRef = useRef(false);
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
+  const [errorMsg, setErrorMsg] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [playerName, setPlayerName] = useState("");
 
@@ -46,7 +47,8 @@ export default function GamePageContent() {
 
   const submitScore = async () => {
     if (!playerName.trim()) {
-      alert("Nama gak boleh kosong bro!");
+      setErrorMsg("⚠️ Nama gak boleh kosong bro!");
+      setTimeout(() => setErrorMsg(""), 3000);
       return;
     }
 
@@ -63,8 +65,9 @@ export default function GamePageContent() {
     const data = await res.json();
 
     if (data.error) {
-      alert("Upload gagal: " + data.error);
+      setErrorMsg("Upload gagal: " + data.error);
     } else {
+      setErrorMsg("");
       alert("Skor berhasil diupload bro! 🔥");
       setScore({ player: 0, ai: 0 });
       setResult("");
@@ -72,9 +75,6 @@ export default function GamePageContent() {
       setPlayerName("");
     }
   };
-
-
-
 
   useEffect(() => {
     isActiveRef.current = true;
@@ -277,6 +277,7 @@ export default function GamePageContent() {
           </Link>
         </div>
 
+        {/* Modal untuk input nama */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
             <div className="bg-gradient-to-b from-yellow-400 to-red-500 p-6 rounded-2xl shadow-2xl text-center arcade-glow w-80 animate-bounce-in">
@@ -305,6 +306,15 @@ export default function GamePageContent() {
             </div>
           </div>
         )}
+
+        {/* Pesan error */}{errorMsg && (
+          <div className="fixed top-5 inset-x-0 flex justify-center z-50">
+            <div className="bg-red-600 text-white px-5 py-3 rounded-xl shadow-lg text-center arcade-glow animate-bounce-in border-4 border-yellow-300">
+              {errorMsg}
+            </div>
+          </div>
+        )}
+
 
         <div className="arcade-content flex flex-col items-center justify-center w-full max-w-md p-6">
           <Webcam
