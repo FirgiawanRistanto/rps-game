@@ -46,9 +46,15 @@ export default function GamePageContent() {
   };
 
   const submitScore = async () => {
+    if (score.player === 0) {
+      setErrorMsg("⚠️ minimal menang 1x dulu bro, baru boleh upload score!");
+      setTimeout(() => setErrorMsg(""), 3000);
+      return;
+    }
+
     if (!playerName.trim()) {
       setErrorMsg("⚠️ Nama gak boleh kosong bro!");
-      setTimeout(() => setErrorMsg(""), 3000);
+      setTimeout(() => setErrorMsg(""), 3000); 
       return;
     }
 
