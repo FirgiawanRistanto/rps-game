@@ -9,7 +9,7 @@ export default function TutorialPage() {
       </h1>
       
       <div className="max-w-2xl bg-indigo-800/60 p-6 rounded-3xl border-4 border-pink-500 shadow-[0_0_25px_5px_rgba(255,0,200,0.5)] space-y-5">
-        <p className="text-lg arcade-desc">
+        <p className="text-md arcade-desc">
           Selamat datang di <span className="font-bold text-yellow-300">Gesture RPS</span>!  
           Di sini kamu bisa main suit (Rock Paper Scissors) pakai gestur tangan langsung di depan kamera. Caranya gampang banget:
         </p>
@@ -28,7 +28,7 @@ export default function TutorialPage() {
           <li>Tunggu hasilnya muncul di layar. Skor otomatis tercatat.</li>
         </ul>
 
-        <p className="text-lg arcade-desc">Gampang banget kan?! Gas cobain main! 🎮</p>
+        <p className="text-md arcade-desc">Gampang banget kan?! Gas cobain main! 🎮</p>
 
         <div className="flex gap-4 pt-4">
           <Link href="/" className="px-6 py-3 bg-gradient-to-b from-yellow-300 to-yellow-500 text-indigo-900 font-extrabold rounded-2xl shadow-[0_0_10px_rgba(255,255,0,0.7)] hover:scale-105 transition">
