@@ -37,6 +37,7 @@ export default function GamePageContent() {
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [playerName, setPlayerName] = useState("");
 
@@ -54,7 +55,7 @@ export default function GamePageContent() {
 
     if (!playerName.trim()) {
       setErrorMsg("⚠️ Nama gak boleh kosong bro!");
-      setTimeout(() => setErrorMsg(""), 3000); 
+      setTimeout(() => setErrorMsg(""), 3000);
       return;
     }
 
@@ -74,7 +75,9 @@ export default function GamePageContent() {
       setErrorMsg("Upload gagal: " + data.error);
     } else {
       setErrorMsg("");
-      alert("Skor berhasil diupload bro! 🔥");
+      setSuccessMsg("🔥 Skor berhasil diupload bro!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+
       setScore({ player: 0, ai: 0 });
       setResult("");
       setShowModal(false);
@@ -348,6 +351,13 @@ export default function GamePageContent() {
           <p className={`arcade-score ${scoreAnim ? "bounce" : ""}`}>
             Score: You {score.player} - AI {score.ai}
           </p>
+
+          {successMsg && (
+            <div className="fixed top-16 left-1/2 transform -translate-x-1/2 bg-yellow-400 text-black font-bold px-6 py-3 rounded-xl shadow-lg arcade-glow z-50 animate-bounce-in">
+              {successMsg}
+            </div>
+          )}
+
 
           {countdown !== null ? (
             <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
