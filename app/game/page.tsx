@@ -248,22 +248,23 @@ export default function GamePageContent() {
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js" strategy="beforeInteractive" />
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js" strategy="beforeInteractive" />
 
-      <div className="absolute top-4 right-4 z-20">
-        <Link href="/leaderboard">
-          <img
-            src="/leaderboard.png"
-            alt="Leaderboard"
-            className="w-10 h-10 hover:scale-110 transition duration-200"
-          />
-        </Link>
-      </div>
+      <div className="arcade-bg flex flex-col items-center justify-center min-h-screen p-4 text-white relative">
+        {/* Tombol Leaderboard */}
+        <div className="fixed top-4 right-4 z-50">
+          <Link href="/leaderboard">
+            <img
+              src="/leaderboard.png"
+              alt="Leaderboard"
+              className="w-10 h-10 hover:scale-110 transition duration-200"
+            />
+          </Link>
+        </div>
 
-      <div className="arcade-bg flex flex-col items-center justify-center min-h-screen p-4 pt-16 text-white relative">
         {/* Tombol Main Menu */}
-        <div className="absolute top-4 left-4 z-50">
+        <div className="fixed top-4 left-4 z-50">
           <Link
             href="/"
-            className="bg-yellow-400 text-black px-4 py-2 rounded-xl shadow-md hover:bg-yellow-300 transition-colors font-bold arcade-button text-sm"
+            className="bg-yellow-400 text-black px-4 py-2 rounded-xl shadow-md hover:bg-yellow-300 transition-colors font-bold text-sm"
           >
             Main Menu
           </Link>
