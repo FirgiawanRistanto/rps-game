@@ -271,7 +271,7 @@ export default function GamePageContent() {
             />
           </Link>
         </div>
-        <div className="arcade-content">
+        <div className="arcade-content flex flex-col items-center justify-center w-full max-w-md p-6">
           <Webcam
             ref={webcamRef}
             mirrored
