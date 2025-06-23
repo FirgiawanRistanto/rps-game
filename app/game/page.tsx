@@ -353,7 +353,7 @@ export default function GamePageContent() {
           </p>
 
           {successMsg && (
-            <div className="fixed top-16 left-1/2 transform -translate-x-1/2 bg-yellow-400 text-black font-bold px-6 py-3 rounded-xl shadow-lg arcade-glow z-50 animate-bounce-in">
+            <div className="fixed top-22 left-1/2 transform -translate-x-1/2 bg-yellow-400 text-black font-bold px-6 py-3 rounded-xl shadow-lg arcade-glow z-50 animate-bounce-in">
               {successMsg}
             </div>
           )}
