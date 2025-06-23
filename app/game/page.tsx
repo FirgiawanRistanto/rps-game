@@ -1,3 +1,8 @@
+export const metadata = {
+  title: 'Game',
+  description: 'Main di sini bro!',
+};
+
 // components/GamePageContent.tsx
 "use client";
 
