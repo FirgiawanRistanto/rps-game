@@ -1,3 +1,4 @@
+
 // components/GamePageContent.tsx
 "use client";
 
@@ -15,11 +16,6 @@ declare global {
     Camera: any;
   }
 }
-
-export const metadata = {
-  title: 'Game',
-  description: 'Main di sini bro!',
-};
 
 export default function GamePageContent() {
   const webcamRef = useRef<Webcam>(null);
