@@ -258,7 +258,7 @@ export default function GamePageContent() {
         </Link>
       </div>
 
-      <div className="arcade-bg flex flex-col items-center justify-center min-h-screen p-4 text-white relative">
+      <div className="arcade-bg flex flex-col items-center justify-center min-h-screen p-4 pt-16 text-white relative">
         {/* Tombol Main Menu */}
         <div className="absolute top-4 left-4 z-50">
           <Link
