@@ -332,13 +332,17 @@ body {
     padding: 10px 24px;
     border-width: 3px;
   }
-}
 
-@media (max-width: 480px) {
   .arcade-buttonn {
     font-size: 18px;
     padding: 10px 24px;
     border-width: 3px;
+  }
+
+  .arcade-title {
+  text-shadow: 0 0 8px #ffffff, 0 0 16px #ff00c8, 0 0 24px #ff00c8;
+  opacity: 0.8;
+  font-size: 18px;
   }
 }
 

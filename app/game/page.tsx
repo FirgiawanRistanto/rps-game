@@ -33,15 +33,19 @@ export default function GamePageContent() {
   const [gameStarted, setGameStarted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [scoreAnim, setScoreAnim] = useState(false);
-
   const isDetectingRef = useRef(false);
   const roundPlayedRef = useRef(false);
   const isActiveRef = useRef(true);
+  const [showModal, setShowModal] = useState(false);
+  const [playerName, setPlayerName] = useState("");
 
-  const handleUploadScore = async () => {
-    const playerName = prompt("Masukkan nama kamu untuk leaderboard:");
 
-    if (!playerName) {
+  const handleUploadScore = () => {
+    setShowModal(true);
+  };
+
+  const submitScore = async () => {
+    if (!playerName.trim()) {
       alert("Nama gak boleh kosong bro!");
       return;
     }
@@ -62,12 +66,13 @@ export default function GamePageContent() {
       alert("Upload gagal: " + data.error);
     } else {
       alert("Skor berhasil diupload bro! 🔥");
-
-      // Reset setelah upload
       setScore({ player: 0, ai: 0 });
       setResult("");
+      setShowModal(false);
+      setPlayerName("");
     }
   };
+
 
 
 
@@ -271,6 +276,36 @@ export default function GamePageContent() {
             />
           </Link>
         </div>
+
+        {showModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+            <div className="bg-gradient-to-b from-yellow-400 to-red-500 p-6 rounded-2xl shadow-2xl text-center arcade-glow w-80 animate-bounce-in">
+              <h2 className="text-2xl font-bold text-indigo-900 mb-4">Masukin Nama Bro!</h2>
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                placeholder="Nama kamu..."
+                className="w-full p-3 rounded-xl text-black font-bold text-center border-2 border-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-400 mb-4"
+              />
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={submitScore}
+                  className="px-4 py-2 bg-indigo-900 text-yellow-300 rounded-xl font-bold hover:scale-110 transition arcade-button text-sm"
+                >
+                  Upload
+                </button>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-xl font-bold hover:scale-110 transition text-sm"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="arcade-content flex flex-col items-center justify-center w-full max-w-md p-6">
           <Webcam
             ref={webcamRef}
