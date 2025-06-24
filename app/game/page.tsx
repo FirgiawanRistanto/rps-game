@@ -75,7 +75,7 @@ export default function GamePageContent() {
       setErrorMsg("Upload gagal: " + data.error);
     } else {
       setErrorMsg("");
-      setSuccessMsg("🔥 Skor berhasil diupload bro!");
+      setSuccessMsg("Skor berhasil diupload bro!");
       setTimeout(() => setSuccessMsg(""), 3000);
 
       setScore({ player: 0, ai: 0 });
@@ -317,7 +317,7 @@ export default function GamePageContent() {
         )}
 
         {/* Pesan error */}{errorMsg && (
-          <div className="fixed top-5 inset-x-0 flex justify-center z-50">
+          <div className="fixed top-22 inset-x-0 flex justify-center z-50">
             <div className="bg-red-600 text-white px-5 py-3 rounded-xl shadow-lg text-center arcade-glow animate-bounce-in border-4 border-yellow-300">
               {errorMsg}
             </div>
